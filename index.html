@@ -122,7 +122,7 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
   margin:calc(-1*var(--s-5)) calc(-1*var(--s-4)) calc(-1*var(--s-5)) auto;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:flex-end}
 .topbar-lead{font-size:var(--t-cap2);color:var(--label-2);white-space:nowrap;letter-spacing:.01em;font-variant-numeric:tabular-nums}
 .topbar-lead.trail{margin-left:auto}
-.large{font-size:var(--t-large);font-weight:700;letter-spacing:-.022em;line-height:1.1;padding-top:var(--s-2);padding-bottom:var(--s-1)}
+.large{font-size:var(--t-large);font-weight:700;letter-spacing:-.022em;line-height:1.1;padding-top:var(--s-6);padding-bottom:var(--s-1)}
 .sub{font-size:var(--t-foot);color:var(--label-2);padding-bottom:var(--s-6)}
 
 /* pull to refresh */
@@ -177,7 +177,7 @@ button.row:active{background:var(--surface-2)}
 :root:not([data-theme="light"]) .seg button.on{box-shadow:none}
 
 /* chips */
-.chips{display:flex;gap:var(--s-4);overflow-x:auto;scrollbar-width:none;padding:var(--s-1) 0}
+.chips{display:flex;gap:var(--s-4);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:var(--s-2) 0}
 .chips::-webkit-scrollbar{display:none}
 .chips.bleed{margin:0 calc(-1*var(--rail));padding-left:var(--rail);padding-right:var(--rail)}
 .chip{flex:0 0 auto;position:relative;display:flex;align-items:center;gap:var(--s-3);padding:var(--s-3) var(--s-5);border-radius:var(--r-pill);background:var(--surface);font-size:var(--t-foot);font-weight:500;color:var(--label-2);white-space:nowrap;min-height:36px}
@@ -1336,11 +1336,13 @@ function openSheet(title, html, after){
   el("sheet").classList.add("on");
   el("sheet").style.transform = "";
   if (after) after();
-  /* put the reader inside the dialog, not behind it */
-  var first = el("sheetBody").querySelector("input,select,textarea,button") || el("sheetTitle");
-  try { first.focus({preventScroll:true}); } catch(err){ try { first.focus(); } catch(e2){} }
+  /* put the reader inside the dialog, not behind it. Never a text field -
+     on iOS that raises the keyboard, and the viewport it leaves behind makes
+     every later tap land somewhere else. */
+  try { el("sheetClose").focus({preventScroll:true}); } catch(err){}
 }
 function closeSheet(){
+  try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(err){}
   el("scrim").classList.remove("on");
   el("sheet").classList.remove("on");
   el("sheet").classList.remove("drag");
@@ -1799,6 +1801,24 @@ document.addEventListener("click", function(e){
     return;
   }
 });
+/* If a sheet ever leaves without closeSheet - a back swipe, a tab switch, a
+   restore from the page cache - the body stays fixed and the scrim stays armed,
+   and every tap after that is swallowed. Check on touch and let it go. */
+function unstick(){
+  if (el("sheet").classList.contains("on")) return;
+  el("scrim").classList.remove("on");
+  el("sheet").style.transform = "";
+  el("app").removeAttribute("aria-hidden");
+  if (document.body.classList.contains("locked")){
+    document.body.classList.remove("locked");
+    document.body.style.top = "";
+    window.scrollTo(0, lockedY);
+  }
+}
+document.addEventListener("touchstart", unstick, {passive:true, capture:true});
+window.addEventListener("pageshow", unstick);
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) unstick(); });
+
 el("sheetClose").addEventListener("click", closeSheet);
 el("scrim").addEventListener("click", closeSheet);
 document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeSheet(); });
