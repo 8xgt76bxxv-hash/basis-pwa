@@ -274,6 +274,11 @@ textarea.box{
 .btn.ghost{background:var(--surface);color:var(--accent)}
 .btn.warn{background:var(--surface);color:var(--neg)}
 .note{font-size:var(--t-cap);color:var(--label-2);line-height:1.45;margin:var(--s-4) 0 0}
+.pick{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--sep-strong);flex-shrink:0;position:relative}
+.pick.on{background:var(--accent);border-color:var(--accent)}
+.pick.on::after{content:"";position:absolute;left:6px;top:3px;width:6px;height:11px;
+  border-right:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(40deg)}
+.row.off .row-t,.row.off .row-s{opacity:.45}
 .err{font-size:var(--t-cap);color:var(--neg);margin:var(--s-4) var(--s-1) 0;min-height:var(--s-6)}
 
 /* ---------- tab bar ---------- */
@@ -1640,67 +1645,300 @@ function sheetHoldDetail(idx){
     });
 }
 
-function sheetImport(){
+/* ========================= import pipeline =========================
+   One path for every way holdings arrive - a pasted list, a photographed
+   statement, a screenshot. Read it into rows, work out what each row would do
+   to the portfolio, show that, and only then write anything. */
+
+var TYPEMAP = {stock:"us_stock", us:"us_stock", equity:"us_stock", etf:"us_stock", fund:"us_stock",
+  intl:"intl_stock", international:"intl_stock", crypto:"crypto", coin:"crypto",
+  bond:"bond", treasury:"bond", reit:"real_estate", "real estate":"real_estate",
+  property:"real_estate", cash:"cash"};
+
+function num(t){
+  var v = parseFloat(String(t).replace(/[^0-9.\-]/g, ""));
+  return isFinite(v) ? v : NaN;
+}
+
+/* Rows arrive in two shapes. A spreadsheet export is delimited, so the columns
+   can be trusted. A photograph is not, so take the symbol and then the numbers
+   in the order they appear - which is how every statement prints them. */
+function parseRows(text){
+  var rows = [], skipped = 0;
+  text.split(/\r?\n/).forEach(function(line){
+    var ln = line.trim();
+    if (!ln) return;
+    /* a thousands separator is not a column break */
+    var flat = ln.replace(/(\d),(?=\d{3}(\D|$))/g, "$1");
+    var parts, delimited = /[\t,;|]/.test(flat);
+    if (delimited) parts = flat.split(/[\t,;|]+/);
+    else           parts = flat.split(/\s+/);
+    parts = parts.map(function(t){ return t.trim().replace(/^["']|["']$/g, ""); }).filter(Boolean);
+    if (!parts.length) return;
+
+    /* a ticker is written in capitals, so prefer one of those over the first
+       word of a fund's name - statements print the symbol either side of it */
+    var tick = "", cls = "", nums = [];
+    for (var j = 0; j < parts.length; j++)
+      if (/^[A-Z][A-Z0-9.\-]{0,9}$/.test(parts[j]) && !TYPEMAP[parts[j].toLowerCase()]) { tick = parts[j]; break; }
+    parts.forEach(function(t) {
+      var low = t.toLowerCase().replace(/[^a-z ]/g, "");
+      if (t === tick) return;
+      if (!tick && /^[A-Za-z][A-Za-z0-9.\-]{0,9}$/.test(t) && !TYPEMAP[low]) { tick = t.toUpperCase(); return; }
+      if (TYPEMAP[low]) { cls = cls || TYPEMAP[low]; return; }
+      var v = num(t);
+      /* a percentage or a date column is not a quantity */
+      if (isFinite(v) && !/%/.test(t) && !/^\d{1,2}\/\d{1,2}/.test(t)) nums.push(v);
+    });
+
+    if (!tick || nums.length < 2 || nums[0] <= 0 || nums[1] <= 0) { skipped++; return; }
+    /* Only a list with real columns can say which one is the cost. On a
+       photographed statement the third figure is nearly always the position's
+       value or its day change, and reading it as a basis would invent a
+       loss - so take the symbol, the shares and the price, and no more. */
+    var cost = NaN;
+    if (delimited && nums.length > 2 && nums[2] > 0) cost = nums[2];
+    /* and if that column is the value after all, it is not a basis */
+    if (isFinite(cost) && Math.abs(cost - nums[0] * nums[1]) < nums[0] * nums[1] * 0.02) cost = NaN;
+    rows.push({tick:tick, shares:nums[0], price:nums[1],
+      cost:(isFinite(cost) ? cost : nums[1]), hasCost:isFinite(cost), cls:cls});
+  });
+  return {rows:rows, skipped:skipped};
+}
+
+function findHolding(acct, tick){
+  for (var i = 0; i < HOLDINGS.length; i++)
+    if (HOLDINGS[i].acct === acct && HOLDINGS[i].tick === tick) return HOLDINGS[i];
+  return null;
+}
+
+/* What each row would do. A symbol you hold in another account stays its own
+   row here - Brokerage: 5 and Roth: 3 total 8 without pretending to be one
+   position, which is the whole point of tracking accounts separately. */
+function buildPlan(rows, acct){
+  return rows.map(function(r){
+    var cur = findHolding(acct, r.tick);
+    var kind = !cur ? "new" : (Math.abs(cur.shares - r.shares) < 1e-9 ? "same" : "update");
+    return {row:r, cur:cur, kind:kind, on:(kind !== "same")};
+  });
+}
+
+function newRecord(r, acct){
+  var c = r.cls || "us_stock";
+  var rec = {acct:acct, tick:r.tick, name:r.tick, cls:c, shares:r.shares,
+    price:r.price, cost:r.cost, day:0, yield:0};
+  if (c === "us_stock" || c === "real_estate") rec.region = {us:1};
+  if (c === "intl_stock") rec.region = {developed:1};
+  if (c === "crypto") rec.cat = "Other crypto";
+  return rec;
+}
+
+function applyPlan(plan, acct){
+  var added = 0, updated = 0;
+  plan.forEach(function(p){
+    if (!p.on) return;
+    var r = p.row;
+    if (p.cur){
+      var cur = p.cur;
+      if (r.hasCost){
+        cur.cost = r.cost;                       /* the statement knows the basis */
+      } else if (r.shares > cur.shares){
+        var bought = r.shares - cur.shares;      /* a top-up at today's price */
+        cur.cost = (cur.shares * cur.cost + bought * r.price) / r.shares;
+      }                                          /* a trim leaves cost per share alone */
+      cur.shares = r.shares;
+      if (isFinite(r.price) && r.price > 0) cur.price = r.price;
+      updated++;
+    } else {
+      HOLDINGS.push(newRecord(r, acct));
+      added++;
+    }
+  });
+  return {added:added, updated:updated};
+}
+
+function shrTxt(n){ return n.toLocaleString("en-US",{maximumFractionDigits:6}); }
+function planLabel(p){
+  var r = p.row, n = shrTxt(r.shares);
+  if (p.kind === "new")    return "New · " + n + " shares at " + usd(r.price,2);
+  if (p.kind === "same")   return "Already have this · " + n + " shares";
+  return shrTxt(p.cur.shares) + " → " + n + " shares · " + usd(r.price,2);
+}
+
+function sheetReview(rows, skipped, acct, back){
+  if (!rows.length){
+    toast("Nothing could be read");
+    if (back) back();
+    return;
+  }
+  var plan = buildPlan(rows, acct), a = acctById(acct);
+
+  function counts(){
+    var n = 0, u = 0;
+    plan.forEach(function(p){ if (p.on) { p.cur ? u++ : n++; } });
+    return {n:n, u:u};
+  }
+  function label(){
+    var c = counts();
+    if (!c.n && !c.u) return "Nothing selected";
+    var bits = [];
+    if (c.n) bits.push("Add " + c.n);
+    if (c.u) bits.push("update " + c.u);
+    return bits.join(", ").replace(/^./, function(m){ return m.toUpperCase(); });
+  }
+  function rowsHtml(){
+    return plan.map(function(p, i){
+      return '<button class="row' + (p.on ? "" : " off") + '" data-rv="' + i + '">' +
+        '<div class="pick' + (p.on ? " on" : "") + '"></div>' +
+        '<div class="row-main"><div class="row-t">' + esc(p.row.tick) + '</div>' +
+        '<div class="row-s">' + esc(planLabel(p)) + '</div></div></button>';
+    }).join("");
+  }
+
+  openSheet("Review",
+    '<div class="note" style="margin:var(--s-2) var(--s-1) 0">Into ' +
+      esc(a.name) + (a.firm ? " · " + esc(a.firm) : "") + '. Nothing is saved until you confirm.' +
+      (skipped ? " " + skipped + (skipped === 1 ? " line was" : " lines were") + " not readable." : "") +
+    '</div>' +
+    '<div class="sect">' + plan.length + (plan.length === 1 ? " holding" : " holdings") + '</div>' +
+    '<div class="card" id="rvList">' + rowsHtml() + '</div>' +
+    '<button class="btn" id="rvGo" style="margin-top:var(--s-7)">' + label() + '</button>' +
+    '<button class="btn ghost" id="rvBack">Back</button>',
+    function(){
+      el("rvList").addEventListener("click", function(e){
+        var t = e.target.closest("[data-rv]");
+        if (!t) return;
+        var p = plan[+t.dataset.rv];
+        p.on = !p.on;
+        t.classList.toggle("off", !p.on);
+        t.querySelector(".pick").classList.toggle("on", p.on);
+        el("rvGo").textContent = label();
+      });
+      el("rvGo").addEventListener("click", function(){
+        var r = applyPlan(plan, acct);
+        if (!r.added && !r.updated){ toast("Nothing selected"); return; }
+        save(); renderAll(); closeSheet();
+        var bits = [];
+        if (r.added) bits.push(r.added + " added");
+        if (r.updated) bits.push(r.updated + " updated");
+        toast(bits.join(", "));
+      });
+      el("rvBack").addEventListener("click", function(){ back ? back() : closeSheet(); });
+    });
+}
+
+function acctOptions(){
+  return ACCOUNTS.map(function(a){ return [a.id, a.name + (a.firm ? " · " + a.firm : "")]; });
+}
+function defaultAcct(){ return state.acct !== "all" ? state.acct : ACCOUNTS[0].id; }
+
+function sheetImport(preset){
   if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
-  var acctOpts = ACCOUNTS.map(function(a){ return [a.id, a.name + (a.firm?" · "+a.firm:"")]; });
   openSheet("Import a list",
-    '<div class="card" style="margin-top:var(--s-2)">'+fieldSelect("fAcct","Into account", acctOpts, state.acct!=="all"?state.acct:ACCOUNTS[0].id)+'</div>'+
-    '<div class="note" style="margin-top:var(--s-6)">One row per holding, commas or tabs:<br>'+
-    '<span style="font-family:var(--mono);font-size:var(--t-cap)">symbol, shares, price, cost per share, type</span><br>'+
-    'Type is optional — stock, intl, crypto, bond, reit or cash.</div>'+
-    '<textarea class="box" id="fPaste" style="margin-top:var(--s-5)" spellcheck="false" '+
-    'placeholder="VTI, 182, 312.44, 214.80\nBTC, 1.42, 86420, 41250, crypto"></textarea>'+
-    '<div class="err" id="fErr"></div>'+
-    '<button class="btn" id="fSave">Import</button>',
+    '<div class="card" style="margin-top:var(--s-2)">' +
+      fieldSelect("fAcct", "Into account", acctOptions(), (preset && preset.acct) || defaultAcct()) + '</div>' +
+    '<div class="note" style="margin-top:var(--s-6)">One row per holding, commas or tabs:<br>' +
+    '<span style="font-family:var(--mono);font-size:var(--t-cap)">symbol, shares, price, cost per share, type</span><br>' +
+    'Type is optional — stock, intl, crypto, bond, reit or cash.</div>' +
+    '<textarea class="box" id="fPaste" style="margin-top:var(--s-5)" spellcheck="false" ' +
+    'placeholder="VTI, 182, 312.44, 214.80\nBTC, 1.42, 86420, 41250, crypto">' +
+    esc((preset && preset.text) || "") + '</textarea>' +
+    '<button class="btn" id="fSave">Review</button>',
     function(){
       el("fSave").addEventListener("click", function(){
-        var acct = el("fAcct").value;
-        var lines = el("fPaste").value.split(/\r?\n/).map(function(s){return s.trim();}).filter(Boolean);
-        var added = 0, skipped = 0;
-        var TYPEMAP = {stock:"us_stock", us:"us_stock", equity:"us_stock", etf:"us_stock",
-          intl:"intl_stock", international:"intl_stock", crypto:"crypto", coin:"crypto",
-          bond:"bond", treasury:"bond", reit:"real_estate", "real estate":"real_estate", cash:"cash"};
-        lines.forEach(function(ln){
-          var p = ln.split(/[\t,;]/).map(function(s){return s.trim();});
-          if (p.length < 3){ skipped++; return; }
-          var tick = p[0].toUpperCase().replace(/^["']|["']$/g,"");
-          var sh = parseFloat(String(p[1]).replace(/[^0-9.\-]/g,""));
-          var px = parseFloat(String(p[2]).replace(/[^0-9.\-]/g,""));
-          var cb = p[3]!==undefined ? parseFloat(String(p[3]).replace(/[^0-9.\-]/g,"")) : NaN;
-          if (!tick || !isFinite(sh) || !isFinite(px) || sh<=0 || px<=0){ skipped++; return; }
-          var c = TYPEMAP[(p[4]||"").toLowerCase()] || "us_stock";
-          var rec = {acct:acct, tick:tick, name:tick, cls:c, shares:sh, price:px,
-            cost:(isFinite(cb)&&cb>0?cb:px), day:0, yield:0};
-          if (c==="us_stock"||c==="real_estate") rec.region = {us:1};
-          if (c==="intl_stock") rec.region = {developed:1};
-          if (c==="crypto") rec.cat = "Other crypto";
-          HOLDINGS.push(rec); added++;
+        var acct = el("fAcct").value, text = el("fPaste").value;
+        var out = parseRows(text);
+        sheetReview(out.rows, out.skipped, acct, function(){
+          sheetImport({acct:acct, text:text});
         });
-        if (!added){ el("fErr").textContent = "Nothing could be read. Check the column order."; return; }
-        save(); renderAll(); closeSheet();
-        toast(added+" added"+(skipped?", "+skipped+" skipped":""));
       });
     });
 }
 
-function sheetScan(){
+/* Reading a screenshot happens on the phone. The recogniser is fetched the
+   first time it is asked for and nothing but the text it finds leaves the
+   device - and what it finds lands in a box you can correct before review. */
+var OCR_SRC = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+function loadOcr(done){
+  if (window.Tesseract) return done(null);
+  if (loadOcr._p){ loadOcr._p.push(done); return; }
+  loadOcr._p = [done];
+  var sc = document.createElement("script");
+  sc.src = OCR_SRC;
+  sc.onload  = function(){ var q = loadOcr._p; loadOcr._p = null; q.forEach(function(f){ f(window.Tesseract ? null : new Error("x")); }); };
+  sc.onerror = function(){ var q = loadOcr._p; loadOcr._p = null; q.forEach(function(f){ f(new Error("x")); }); };
+  document.head.appendChild(sc);
+}
+
+function sheetScan(preset){
+  if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
+  var file = null, busy = false;
   openSheet("Scan a statement",
-    '<div class="note" style="margin-top:var(--s-3)">Take a photo of a holdings page, or pick one from your library.</div>'+
-    '<input id="fPhoto" type="file" accept="image/*" capture="environment" style="display:none">'+
-    '<button class="btn ghost" id="fPick">Take or choose a photo</button>'+
-    '<div id="fShot"></div>'+
-    '<div class="note" id="fMsg"></div>'+
-    '<button class="btn" id="fManual">Enter a holding by hand</button>',
+    '<div class="note" style="margin:var(--s-2) var(--s-1) 0">A screenshot of a holdings page reads best. ' +
+    'Check what comes back before anything is saved.</div>' +
+    '<div class="card" style="margin-top:var(--s-6)">' +
+      fieldSelect("fAcct", "Into account", acctOptions(), (preset && preset.acct) || defaultAcct()) + '</div>' +
+    '<input id="fPhoto" type="file" accept="image/*" style="display:none">' +
+    '<button class="btn ghost" id="fPick" style="margin-top:var(--s-6)">Choose a screenshot or photo</button>' +
+    '<div id="fShot"></div>' +
+    '<div class="note" id="fMsg"></div>' +
+    '<textarea class="box" id="fPaste" style="margin-top:var(--s-5)" spellcheck="false" ' +
+    'placeholder="Symbol, shares and price — one holding per line">' +
+    esc((preset && preset.text) || "") + '</textarea>' +
+    '<button class="btn" id="fGo">Review</button>',
     function(){
       el("fPick").addEventListener("click", function(){ el("fPhoto").click(); });
       el("fPhoto").addEventListener("change", function(){
-        var f = this.files && this.files[0]; if(!f) return;
-        var url = URL.createObjectURL(f);
-        el("fShot").innerHTML = '<img src="'+url+'" alt="Statement photo" '+
+        file = this.files && this.files[0];
+        if (!file) return;
+        el("fShot").innerHTML = '<img src="' + URL.createObjectURL(file) + '" alt="The page you chose" ' +
           'style="width:100%;border-radius:var(--r-card);margin-top:var(--s-5);display:block">';
-        el("fMsg").textContent = "Got the photo. Type the numbers in below — or paste a whole list under Import.";
+        el("fPick").textContent = "Choose a different one";
+        read();
       });
-      el("fManual").addEventListener("click", function(){ sheetHolding(); });
+
+      function read(){
+        if (busy || !file) return;
+        busy = true;
+        el("fMsg").textContent = "Reading it…";
+        loadOcr(function(err){
+          if (err){
+            busy = false;
+            el("fMsg").textContent = "Could not reach the reader. Type the holdings in below instead.";
+            return;
+          }
+          window.Tesseract.recognize(file, "eng", {
+            logger: function(m){
+              if (m.status === "recognizing text")
+                el("fMsg").textContent = "Reading it… " + Math.round(m.progress * 100) + "%";
+            }
+          }).then(function(res){
+            busy = false;
+            var text = ((res && res.data && res.data.text) || "").trim();
+            var out = parseRows(text);
+            if (!out.rows.length){
+              el("fMsg").textContent = "Nothing readable came back. Type the holdings in below.";
+              return;
+            }
+            el("fPaste").value = out.rows.map(function(r){
+              return [r.tick, r.shares, r.price].concat(r.hasCost ? [r.cost] : []).join(", ");
+            }).join("\n");
+            el("fMsg").textContent = out.rows.length + (out.rows.length === 1 ? " holding" : " holdings") +
+              " found. Fix anything that looks wrong, then review.";
+          }).catch(function(){
+            busy = false;
+            el("fMsg").textContent = "That image could not be read. Type the holdings in below instead.";
+          });
+        });
+      }
+
+      el("fGo").addEventListener("click", function(){
+        var acct = el("fAcct").value, text = el("fPaste").value;
+        var out = parseRows(text);
+        sheetReview(out.rows, out.skipped, acct, function(){
+          sheetScan({acct:acct, text:text});
+        });
+      });
     });
 }
 
