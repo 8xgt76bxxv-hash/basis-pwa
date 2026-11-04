@@ -1,0 +1,1632 @@
+(function(){
+"use strict";
+
+/* ========================= palette ========================= */
+/* Every top-level category gets its own hue. Green and red are reserved
+   for gain and loss, so they never appear as a category colour. */
+var SWATCHES = [
+  {k:"indigo", v:"var(--c-indigo)"}, {k:"cyan",  v:"var(--c-cyan)"},
+  {k:"orange", v:"var(--c-orange)"}, {k:"purple",v:"var(--c-purple)"},
+  {k:"teal",   v:"var(--c-teal)"},   {k:"brown", v:"var(--c-brown)"},
+  {k:"gold",   v:"var(--c-gold)"},   {k:"slate", v:"var(--c-slate)"},
+  {k:"rose",   v:"var(--c-rose)"},   {k:"gray",  v:"var(--c-gray)"}
+];
+var SWATCH = {};
+SWATCHES.forEach(function(s){ SWATCH[s.k] = s.v; });
+
+/* ========================= reference data ========================= */
+var SECTORS = ["Information Technology","Financials","Health Care","Consumer Discretionary",
+  "Communication Services","Industrials","Consumer Staples","Energy","Utilities","Real Estate","Materials"];
+
+var CRYPTO_CATS = ["Store of Value","Smart Contract Platforms","Infrastructure Applications",
+  "DeFi","Stablecoins"];
+
+var MIX = {
+  total_us: {"Information Technology":.335,"Financials":.135,"Consumer Discretionary":.105,"Health Care":.095,
+             "Communication Services":.095,"Industrials":.085,"Consumer Staples":.050,"Energy":.033,
+             "Utilities":.025,"Real Estate":.022,"Materials":.020},
+  nasdaq:   {"Information Technology":.575,"Communication Services":.160,"Consumer Discretionary":.135,
+             "Health Care":.055,"Consumer Staples":.045,"Industrials":.030},
+  smallval: {"Financials":.285,"Industrials":.215,"Consumer Discretionary":.180,"Energy":.105,
+             "Materials":.075,"Real Estate":.055,"Information Technology":.045,"Health Care":.040},
+  intl:     {"Financials":.225,"Industrials":.150,"Information Technology":.125,"Consumer Discretionary":.110,
+             "Health Care":.090,"Consumer Staples":.075,"Materials":.065,"Communication Services":.055,
+             "Energy":.050,"Utilities":.035,"Real Estate":.020}
+};
+function one(s){ var o={}; o[s]=1; return o; }
+
+var CLASS_META = {
+  us_stock:   {label:"US stocks",            color:"var(--c-indigo)"},
+  intl_stock: {label:"International stocks", color:"var(--c-cyan)"},
+  crypto:     {label:"Crypto",               color:"var(--c-orange)"},
+  bond:       {label:"Bonds",                color:"var(--c-brown)"},
+  real_estate:{label:"Real estate",          color:"var(--c-purple)"},
+  cash:       {label:"Cash",                 color:"var(--c-gray)"},
+  /* things you own that no market prices - they sit outside the portfolio total */
+  property:   {label:"Property",             color:"var(--c-teal)"},
+  vehicle:    {label:"Vehicle",              color:"var(--c-slate)"},
+  collectible:{label:"Collectible",          color:"var(--c-rose)"},
+  other:      {label:"Other asset",          color:"var(--c-gold)"},
+  loan:       {label:"Loan",                 color:"var(--c-gray)"}
+};
+var OFF = {property:1, vehicle:1, collectible:1, other:1, loan:1};
+var REGION_META = {
+  us:        {label:"United States",   color:"var(--c-indigo)"},
+  developed: {label:"Developed ex-US", color:"var(--c-cyan)"},
+  emerging:  {label:"Emerging markets",color:"var(--c-purple)"}
+};
+var VOL = {us_stock:.0104, intl_stock:.0092, crypto:.0345, bond:.0032, real_estate:.0118, cash:0};
+
+/* ========================= seed portfolio ========================= */
+var SEED_ACCOUNTS = [
+  {id:"brokerage", name:"Brokerage", firm:"Fidelity", color:"indigo"},
+  {id:"roth",      name:"Roth IRA",  firm:"Vanguard", color:"cyan"},
+  {id:"hsa",       name:"HSA",       firm:"Fidelity", color:"orange"},
+  {id:"wallet",    name:"Crypto",    firm:"Coinbase", color:"purple"},
+  {id:"cash",      name:"Cash",      firm:"Ally",     color:"brown"},
+  {id:"other",     name:"Other assets", firm:"Manual", color:"slate", off:true}
+];
+
+function h(a,t,n,c,sh,px,cb,d,y,extra){
+  var o = {acct:a, tick:t, name:n, cls:c, shares:sh, price:px, cost:cb, day:d, yield:y||0};
+  if (extra) for (var k in extra) o[k] = extra[k];
+  return o;
+}
+var SEED_HOLDINGS = [
+  h("brokerage","VTI","Vanguard Total Stock Market",      "us_stock",  11.3, 312.44, 214.80,  0.42, 1.21, {held:1460, mix:MIX.total_us, region:{us:1}}),
+  h("brokerage","VOO","Vanguard S&P 500",                 "us_stock",  2.85, 548.90, 401.20,  0.38, 1.18, {held:1120, mix:MIX.total_us, region:{us:1}}),
+  h("brokerage","QQQ","Invesco QQQ Trust",                "us_stock",  2.11, 512.75, 362.10,  0.61, 0.52, {held:1205, mix:MIX.nasdaq,  region:{us:1}}),
+  h("brokerage","AVUV","Avantis US Small Cap Value",      "us_stock",  7.43,  98.42,  76.15,  0.25, 1.34, {held:905, mix:MIX.smallval,region:{us:1}}),
+  h("brokerage","NVDA","NVIDIA",                          "us_stock",  3.72, 186.20,  44.90,  1.84, 0.03, {held:1680, mix:one("Information Technology"), region:{us:1}}),
+  h("brokerage","AAPL","Apple",                           "us_stock",  5.88, 268.40, 142.60, -0.31, 0.42, {held:2190, mix:one("Information Technology"), region:{us:1}}),
+  h("brokerage","MRK","Merck",                            "us_stock",  6.81,  94.15, 108.30, -0.64, 3.28, {held:730, mix:one("Health Care"), region:{us:1}}),
+  h("brokerage","O","Realty Income",                      "real_estate", 13,  61.80,  58.40,  0.18, 5.42, {held:168, mix:one("Real Estate"), region:{us:1}}),
+  h("brokerage","VXUS","Vanguard Total International",    "intl_stock", 14.9,  72.95,  58.20,  0.52, 2.88, {held:800, mix:MIX.intl, region:{developed:.75, emerging:.25}}),
+  h("brokerage","VEA","Vanguard Developed Markets",       "intl_stock", 9.29,  57.30,  46.90,  0.47, 3.04, {held:730, mix:MIX.intl, region:{developed:1}}),
+
+  h("roth","VTI","Vanguard Total Stock Market",           "us_stock",  5.88, 312.44, 231.50,  0.42, 1.21, {held:1095, mix:MIX.total_us, region:{us:1}}),
+  h("roth","VXUS","Vanguard Total International",         "intl_stock", 6.81,  72.95,  61.40,  0.52, 2.88, {held:640, mix:MIX.intl, region:{developed:.75, emerging:.25}}),
+  h("roth","BND","Vanguard Total Bond Market",            "bond",      11.1,  74.60,  77.90, -0.08, 3.72, {held:1250}),
+  h("roth","VNQ","Vanguard Real Estate",                  "real_estate",3.72,  95.20,  84.10,  0.22, 3.64, {held:95, mix:one("Real Estate"), region:{us:1}}),
+
+  h("hsa","VOO","Vanguard S&P 500",                       "us_stock",  0.87, 548.90, 455.70,  0.38, 1.18, {held:700, mix:MIX.total_us, region:{us:1}}),
+  h("hsa","XLV","Health Care Select Sector",              "us_stock",  3.41, 152.80, 131.40, -0.22, 1.58, {held:560, mix:one("Health Care"), region:{us:1}}),
+  h("hsa","SGOV","iShares 0-3 Month Treasury",            "bond",      2.48, 100.42, 100.18,  0.01, 4.98, {held:12}),
+
+  h("wallet","BTC","Bitcoin",                             "crypto", 0.08793, 86420, 41250,    1.12, 0,    {held:620, cat:"Store of Value"}),
+  h("wallet","ETH","Ethereum",                            "crypto",   0.588,  3180,  2240,    2.04, 0,    {held:300, cat:"Smart Contract Platforms"}),
+  h("wallet","SOL","Solana",                              "crypto",    5.33, 184.60, 96.40,   3.21, 0,    {held:540, cat:"Smart Contract Platforms"}),
+  h("wallet","LINK","Chainlink",                          "crypto",      26,  22.85, 14.60,  -1.48, 0,    {held:380, cat:"Infrastructure Applications"}),
+  h("wallet","UNI","Uniswap",                             "crypto",    14.9,  14.60,  9.80,  -1.24, 0,    {held:330, cat:"DeFi"}),
+  h("wallet","USDC","USD Coin",                           "crypto",     403,   1.00,  1.00,   0.00, 4.10, {held:26, cat:"Stablecoins"}),
+
+  h("cash","HYSA","Ally Savings",                         "cash",      1139,      1,     1,   0.00, 4.30, {held:1200}),
+  h("cash","CHK","Checking",                              "cash",       201,      1,     1,   0.00, 0.10, {held:1200}),
+
+  h("other","HOME","Home",                              "property",     1, 165000, 148000, 0, 0, {held:2400}),
+  h("other","CAR","2023 4Runner",                       "vehicle",      1,   7800,  14200, 0, 0, {held:980}),
+  h("other","MTG","Mortgage",                           "loan",         1,-142000,-142000, 0, 0, {held:2400})
+];
+
+/* ========================= markets ========================= */
+var MARKETS = {
+  indices: {title:"Indices", rows:[
+    {n:"S&P 500",     s:"SPX",  v:7215.40, d: 0.38},
+    {n:"Nasdaq 100",  s:"NDX",  v:26418.92,d: 0.61},
+    {n:"Dow Jones",   s:"DJI",  v:48207.15,d: 0.12},
+    {n:"Russell 2000",s:"RUT",  v:2614.08, d:-0.22},
+    {n:"FTSE 100",    s:"UKX",  v:9842.60, d: 0.44},
+    {n:"Nikkei 225",  s:"NKY",  v:48910.25,d:-0.18},
+    {n:"DAX",         s:"DAX",  v:24781.33,d: 0.29},
+    {n:"Euro Stoxx 50",s:"SX5E",v:5742.18, d: 0.21}
+  ]},
+  sectors: {title:"Sectors", rows:[
+    {n:"Information Technology",s:"XLK",v:286.40,d: 0.94},
+    {n:"Financials",           s:"XLF",v: 56.82,d: 0.31},
+    {n:"Health Care",          s:"XLV",v:152.80,d:-0.22},
+    {n:"Consumer Discretionary",s:"XLY",v:231.47,d: 0.46},
+    {n:"Communication Services",s:"XLC",v:118.95,d: 0.72},
+    {n:"Industrials",          s:"XLI",v:148.20,d: 0.08},
+    {n:"Consumer Staples",     s:"XLP",v: 81.36,d:-0.41},
+    {n:"Energy",               s:"XLE",v: 94.70,d:-0.86},
+    {n:"Utilities",            s:"XLU",v: 86.14,d:-0.12},
+    {n:"Real Estate",          s:"XLRE",v:44.28,d: 0.18},
+    {n:"Materials",            s:"XLB",v: 92.55,d:-0.34}
+  ]},
+  commodities: {title:"Commodities", rows:[
+    {n:"Gold",        s:"XAU", v:4182.50,d: 0.67},
+    {n:"Silver",      s:"XAG", v:  58.94,d: 1.22},
+    {n:"Platinum",    s:"XPT", v:1486.20,d:-0.35},
+    {n:"Copper",      s:"HG",  v:   5.42,d: 0.48},
+    {n:"Crude oil",   s:"WTI", v:  63.18,d:-1.04},
+    {n:"Natural gas", s:"NG",  v:   4.26,d: 2.18}
+  ]},
+  crypto: {title:"Crypto", rows:[
+    {n:"Bitcoin",  s:"BTC", v:86420.00,d: 1.12},
+    {n:"Ethereum", s:"ETH", v: 3180.00,d: 2.04},
+    {n:"Solana",   s:"SOL", v:  184.60,d: 3.21},
+    {n:"Chainlink",s:"LINK",v:   22.85,d:-1.48},
+    {n:"Uniswap",  s:"UNI", v:   14.60,d:-1.24},
+    {n:"USD Coin", s:"USDC",v:    1.00,d: 0.00}
+  ]},
+  rates: {title:"Rates", rows:[
+    {n:"2-year Treasury", s:"US2Y", v:3.42,d:-0.04,pct:true},
+    {n:"10-year Treasury",s:"US10Y",v:4.08,d: 0.03,pct:true},
+    {n:"30-year Treasury",s:"US30Y",v:4.61,d: 0.05,pct:true},
+    {n:"Fed funds",       s:"FF",   v:3.75,d: 0.00,pct:true},
+    {n:"30-year mortgage",s:"MTG30",v:6.12,d:-0.02,pct:true},
+    {n:"High-yield savings",s:"HYSA",v:4.30,d:0.00,pct:true}
+  ]}
+};
+var MKT_ORDER = ["indices","sectors","commodities","crypto","rates"];
+
+/* ========================= helpers ========================= */
+var TODAY = new Date(2026, 9, 27);
+var N_DAYS = 1826, N_INTRA = 79;
+var PERIODS = [
+  {k:"1D", n:N_INTRA, label:"today"},
+  {k:"1W", n:6,    label:"this week"},
+  {k:"1M", n:22,   label:"this month"},
+  {k:"3M", n:65,   label:"3 months"},
+  {k:"1Y", n:252,  label:"1 year"},
+  {k:"ALL",n:N_DAYS-1, label:"all time"}
+];
+
+function hashStr(s){ var x=2166136261>>>0; for(var i=0;i<s.length;i++){ x^=s.charCodeAt(i); x=Math.imul(x,16777619);} return x>>>0; }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; var t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function gauss(r){ var u=0,v=0; while(u===0)u=r(); while(v===0)v=r();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+/* log-space walk, detrended so it starts exactly at `from` and ends exactly at `to` */
+function walk(seed,n,vol,from,to){
+  if(n<2) return [to];
+  var r=mulberry32(hashStr(seed)), s=[0], i;
+  for(i=1;i<n;i++) s.push(s[i-1] + gauss(r)*vol);
+  var drift=(Math.log(to/from) - s[n-1])/(n-1), out=[];
+  for(i=0;i<n;i++) out.push(from*Math.exp(s[i]+drift*i));
+  return out;
+}
+
+function usd(n,dp){
+  var d = dp===undefined ? (Math.abs(n)>=1000?0:2) : dp;
+  return "$"+n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+}
+function signed(n){ return (n>=0?"+":"−")+usd(Math.abs(n)); }
+function pct(n,dp){ return (n>=0?"+":"−")+Math.abs(n).toFixed(dp===undefined?2:dp)+"%"; }
+function cls(n){ return n>=0?"pos":"neg"; }
+function esc(s){ return String(s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+function el(id){ return document.getElementById(id); }
+/* a sequential ramp inside one parent hue - strong enough to read as an order */
+function ramp(base,i,n){
+  var t = n<2 ? 0 : i/(n-1);
+  return "color-mix(in oklab, "+base+" "+Math.round(100 - t*74)+"%, var(--mixbase))";
+}
+
+/* ========================= state ========================= */
+var KEY = "basis.v2";
+var state = {
+  tab:"portfolio", period:"1M", acct:"all", bAcct:"all", market:"indices",
+  theme:"system", scrubIndex:null, updated:new Date(TODAY.getTime()+9*3600e3+41*60e3)
+};
+var ACCOUNTS, HOLDINGS;
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+/* What comes back out of storage is only as good as whatever last wrote it,
+   and on a shared host that need not have been this app. Rebuild every record
+   field by field, from the shapes this app writes, and drop what does not fit. */
+var ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+function str(v, max){ return typeof v === "string" ? v.slice(0, max || 120) : ""; }
+function fin(v){ var n = typeof v === "number" ? v : NaN; return isFinite(n) ? n : 0; }
+function weights(o, allowed){
+  if (!o || typeof o !== "object") return null;
+  var out = {}, any = false;
+  for (var k in o) if (Object.prototype.hasOwnProperty.call(allowed, k) && fin(o[k]) > 0){ out[k] = fin(o[k]); any = true; }
+  return any ? out : null;
+}
+var SECTOR_SET = {}, CAT_SET = {"Other crypto":1};
+SECTORS.forEach(function(s){ SECTOR_SET[s] = 1; });
+CRYPTO_CATS.forEach(function(s){ CAT_SET[s] = 1; });
+function cleanAccount(a){
+  if (!a || typeof a !== "object" || typeof a.id !== "string" || !ID_RE.test(a.id)) return null;
+  var o = {id:a.id, name:str(a.name) || "Account", firm:str(a.firm),
+           color:Object.prototype.hasOwnProperty.call(SWATCH, a.color) ? a.color : "gray"};
+  if (a.off === true) o.off = true;
+  return o;
+}
+function cleanHolding(h){
+  if (!h || typeof h !== "object" || typeof h.acct !== "string" || !ID_RE.test(h.acct)) return null;
+  if (!Object.prototype.hasOwnProperty.call(CLASS_META, h.cls)) return null;
+  var o = {acct:h.acct, tick:str(h.tick, 12), name:str(h.name), cls:h.cls,
+    shares:fin(h.shares), price:fin(h.price), cost:fin(h.cost), day:fin(h.day), yield:fin(h.yield)};
+  var mix = weights(h.mix, SECTOR_SET);           if (mix) o.mix = mix;
+  var region = weights(h.region, REGION_META);    if (region) o.region = region;
+  if (Object.prototype.hasOwnProperty.call(CAT_SET, h.cat)) o.cat = h.cat;
+  if (typeof h.bought === "string" && /^\d{4}-\d{2}-\d{2}$/.test(h.bought)) o.bought = h.bought;
+  if (fin(h.held) > 0) o.held = fin(h.held);
+  return o;
+}
+function cleanList(arr, fn){
+  if (!Array.isArray(arr)) return null;
+  return arr.map(fn).filter(Boolean);
+}
+
+function load(){
+  ACCOUNTS = clone(SEED_ACCOUNTS); HOLDINGS = clone(SEED_HOLDINGS);
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (!raw) return;
+    var d = JSON.parse(raw);
+    if (!d || typeof d !== "object") return;
+    var accts = cleanList(d.accounts, cleanAccount);
+    if (accts && accts.length) ACCOUNTS = accts;
+    var holds = cleanList(d.holdings, cleanHolding);
+    if (holds) HOLDINGS = holds;
+    if (d.theme === "light" || d.theme === "dark" || d.theme === "system") state.theme = d.theme;
+  } catch(e){}
+}
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify({accounts:ACCOUNTS, holdings:HOLDINGS, theme:state.theme})); }
+  catch(e){}
+}
+function acctById(id){ for(var i=0;i<ACCOUNTS.length;i++) if(ACCOUNTS[i].id===id) return ACCOUNTS[i];
+  return {id:id,name:"Account",firm:"",color:"gray"}; }
+function acctColor(id){ return SWATCH[acctById(id).color] || "var(--c-gray)"; }
+
+/* ========================= derived ========================= */
+function inScope(h, scope){ return scope==="all" || h.acct===scope; }
+function val(h){ return h.shares * h.price; }
+function basis(h){ return h.shares * h.cost; }
+function scoped(scope){ return HOLDINGS.filter(function(h){ return !OFF[h.cls] && inScope(h,scope); }); }
+function offHoldings(){ return HOLDINGS.filter(function(h){ return OFF[h.cls]; }); }
+function liveAccounts(){ return ACCOUNTS.filter(function(a){ return !a.off; }); }
+function sum(arr,f){ var t=0; for(var i=0;i<arr.length;i++) t+=f(arr[i]); return t; }
+
+/* How long a lot has been held. Every seeded lot stores its own age and a
+   holding you add can carry the date you bought it, so nothing is guessed from
+   the return. The fallback below is only for a holding with neither, and it
+   runs one way: a gain can hint at age, a loss says nothing at all. */
+var GROWTH = {crypto:.55, cash:.035, bond:.05};
+function heldDays(h){
+  if (h.bought){
+    var d = Math.round((TODAY - new Date(h.bought+"T00:00:00"))/86400e3);
+    if (isFinite(d) && d > 0) return d;
+  }
+  if (h.held > 0) return h.held;
+  var g = (h.cost>0 && h.price>0) ? h.price/h.cost : 1;
+  var r = GROWTH[h.cls] !== undefined ? GROWTH[h.cls] : .11;
+  var yrs = g > 1.004 ? Math.log(g)/Math.log(1+r) : 2;
+  return Math.round(Math.max(.12, yrs)*365);
+}
+/* what you have put in, point by point, over the same window as the chart */
+function investedSeries(scope, periodKey){
+  var hs = scoped(scope), i, j;
+  var n = periodKey==="1D" ? N_INTRA : Math.min(periodDef(periodKey).n+1, N_DAYS);
+  var out = new Array(n);
+  for(i=0;i<n;i++) out[i] = 0;
+  for(j=0;j<hs.length;j++){
+    var h = hs[j], b = basis(h);
+    if (periodKey==="1D"){ for(i=0;i<n;i++) out[i] += b; continue; }
+    var bought = (N_DAYS-1-Math.min(heldDays(h), N_DAYS-1)) - (N_DAYS-n);
+    for(i=Math.max(0,bought);i<n;i++) out[i] += b;
+  }
+  return out;
+}
+
+var seriesCache = {};
+function holdingSeries(h, periodKey){
+  var key = h.acct+"|"+h.tick+"|"+h.shares+"|"+h.price+"|"+h.cost+"|"+h.day+"|"+heldDays(h)+"|"+periodKey;
+  if (seriesCache[key]) return seriesCache[key];
+  var vol = VOL[h.cls] !== undefined ? VOL[h.cls] : .009;
+  var out, i;
+  if (periodKey === "1D"){
+    var prev = h.day ? h.price/(1+h.day/100) : h.price;
+    out = walk(h.acct+h.tick+"intra", N_INTRA, vol/7, prev || h.price, h.price);
+  } else {
+    var p; for(i=0;i<PERIODS.length;i++) if(PERIODS[i].k===periodKey) p=PERIODS[i];
+    var owned = Math.min(heldDays(h), N_DAYS-1) + 1;
+    var seg = walk(h.acct+h.tick, owned, vol, h.cost || h.price, h.price);
+    var full = new Array(N_DAYS - owned);
+    for(i=0;i<full.length;i++) full[i] = 0;
+    full = full.concat(seg);
+    out = full.slice(Math.max(0, N_DAYS - (p.n+1)));
+  }
+  for(i=0;i<out.length;i++) out[i] = out[i]*h.shares;
+  seriesCache[key] = out;
+  return out;
+}
+function portfolioSeries(scope, periodKey){
+  var hs = scoped(scope);
+  if (!hs.length) return [0,0];
+  var n = 0, i, j;
+  var parts = hs.map(function(h){ var s = holdingSeries(h, periodKey); if(s.length>n) n=s.length; return s; });
+  var out = new Array(n);
+  for(i=0;i<n;i++){
+    var t=0;
+    /* a zero here means the lot was not owned yet - it is a real value, not a gap */
+    for(j=0;j<parts.length;j++){
+      var p=parts[j], k = n<2 ? 0 : Math.round(i/(n-1)*(p.length-1));
+      t += p[k] === undefined ? p[p.length-1] : p[k];
+    }
+    out[i]=t;
+  }
+  return out;
+}
+
+/* ========================= chart ========================= */
+var chartPts = [];
+function drawChart(series, invested){
+  var W=1000, H=300, PAD=14, i;
+  var lo=Infinity, hi=-Infinity;
+  for(i=0;i<series.length;i++){ if(series[i]<lo)lo=series[i]; if(series[i]>hi)hi=series[i]; }
+  if (hi===lo){ hi=lo+1; lo=lo-1; }
+  var span = hi-lo;
+  chartPts = series.map(function(v,ix){
+    return { x: series.length<2?0:ix/(series.length-1)*W, y: PAD + (1-(v-lo)/span)*(H-2*PAD), v:v };
+  });
+  var d="", a="";
+  for(i=0;i<chartPts.length;i++){
+    d += (i?"L":"M") + chartPts[i].x.toFixed(1) + " " + chartPts[i].y.toFixed(1) + " ";
+  }
+  a = d + "L"+W+" "+H+" L0 "+H+" Z";
+  el("chartLine").setAttribute("d", d.trim());
+  el("chartArea").setAttribute("d", a.trim());
+
+  /* where the period started, so a rising line can be read against something */
+  var y0 = chartPts.length ? chartPts[0].y.toFixed(1) : PAD;
+  el("chartBase").setAttribute("d", "M0 "+y0+" L"+W+" "+y0);
+
+  /* and a tick under every step that is money going in, not the market moving */
+  var tk = "";
+  if (invested){
+    for(i=1;i<invested.length && i<chartPts.length;i++){
+      if (invested[i] - invested[i-1] > 1){
+        var x = chartPts[i].x.toFixed(1);
+        tk += "M"+x+" "+(H-13)+" L"+x+" "+H+" ";
+      }
+    }
+  }
+  el("chartMarks").setAttribute("d", tk.trim());
+}
+
+function periodDef(k){ for(var i=0;i<PERIODS.length;i++) if(PERIODS[i].k===k) return PERIODS[i]; return PERIODS[2]; }
+function dateAt(ix, n){
+  if (state.period==="1D"){
+    var mins = 570 + Math.round(ix/(n-1)*390);
+    var dt = new Date(TODAY.getTime()); dt.setHours(0, mins, 0, 0);
+    return dt.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+  }
+  var days = periodDef(state.period).n;
+  var back = Math.round((1 - ix/(n-1)) * days);
+  var d = new Date(TODAY.getTime() - back*86400e3);
+  return d.toLocaleDateString("en-US", days>300
+    ? {month:"short", year:"numeric"} : {month:"short", day:"numeric"});
+}
+
+function paintHero(){
+  var series = portfolioSeries(state.acct, state.period);
+  var inv = investedSeries(state.acct, state.period);
+  drawChart(series, inv);
+  var n = series.length, q;
+  var ix = state.scrubIndex === null ? n-1 : Math.max(0, Math.min(n-1, state.scrubIndex));
+  var first = series[0], here = series[ix];
+  /* money you put in is not performance - take it out before saying how it did */
+  var hi = Math.min(ix, inv.length-1);
+  var added = (inv[hi] || 0) - (inv[0] || 0);
+  var mkt = (here - first) - added;
+  /* a deposit made yesterday had almost no chance to earn anything, so it
+     counts for almost nothing in what the percentage is measured against */
+  var weighted = 0, T = hi || 1;
+  for(q=1;q<=hi;q++) weighted += ((inv[q] || 0) - (inv[q-1] || 0)) * (T-q)/T;
+  var base = first + weighted, dp = base ? mkt/base*100 : 0;
+
+  el("heroValue").textContent = usd(here, 2);
+  el("heroDelta").innerHTML = '<span class="'+cls(mkt)+'"><span class="arrow">'+(mkt>=0?"▲":"▼")+
+    '</span> '+signed(mkt)+' ('+pct(dp)+')</span>';
+  var addLine = el("heroAdd");
+  if (added > 1){
+    addLine.hidden = false;
+    addLine.innerHTML = '<span class="tkey"></span>' + signed(added) + " you added, marked below";
+  } else addLine.hidden = true;
+
+  /* on 1D the hero already is today - do not print the same number twice */
+  var oneDay = state.period === "1D";
+  el("todayTitle").textContent = oneDay ? "What moved today" : "Today";
+  el("todayValue").hidden = oneDay;
+  el("todayPct").hidden = oneDay;
+  syncTodayCard();
+  el("heroWhen").textContent = state.scrubIndex===null
+    ? periodDef(state.period).label
+    : dateAt(ix, n);
+
+  var cross = el("cross"), knob = el("knob"), box = el("chartBox");
+  if (state.scrubIndex === null){ cross.classList.remove("on"); knob.classList.remove("on"); }
+  else {
+    var p = chartPts[ix], w = box.clientWidth, hgt = box.clientHeight;
+    var px = p.x/1000*w, py = p.y/300*hgt;
+    cross.style.left = px+"px"; knob.style.left = px+"px"; knob.style.top = py+"px";
+    cross.classList.add("on"); knob.classList.add("on");
+  }
+}
+
+/* A card is its header plus its contents, and a card with no contents is not
+   a card - it is a title floating in a box. On 1D the hero already says what
+   today did, so this card exists only for the movers; with no movers in scope
+   (an all-cash account, say) the whole card goes. */
+var todayMoverCount = 0;
+function syncTodayCard(){
+  var card = el("todayCard");
+  if (!card) return;
+  card.hidden = state.period === "1D" && todayMoverCount === 0;
+}
+
+function bindChart(){
+  var box = el("chartBox");
+  function at(clientX){
+    var r = box.getBoundingClientRect();
+    var t = Math.max(0, Math.min(1, (clientX - r.left)/r.width));
+    state.scrubIndex = Math.round(t * (chartPts.length-1));
+    paintHero();
+  }
+  function off(){ if(state.scrubIndex!==null){ state.scrubIndex=null; paintHero(); } }
+  /* hover scrubs - no press required */
+  box.addEventListener("mousemove", function(e){ at(e.clientX); });
+  box.addEventListener("mouseleave", off);
+  /* a touch only arms the scrub. It starts on the first move that is clearly
+     sideways, so a thumb landing here to scroll the page does not flash a
+     wrong total, and does not arm pull-to-refresh at the same time. */
+  var start = null, locked = false;
+  box.addEventListener("touchstart", function(e){
+    start = {x:e.touches[0].clientX, y:e.touches[0].clientY}; locked = false;
+  }, {passive:true});
+  box.addEventListener("touchmove", function(e){
+    if (!start) return;
+    var t = e.touches[0];
+    if (!locked){
+      var ax = Math.abs(t.clientX-start.x), ay = Math.abs(t.clientY-start.y);
+      if (ax < 6 && ay < 6) return;
+      if (ax <= ay){ start = null; return; }
+      locked = true;
+    }
+    e.preventDefault();
+    at(t.clientX);
+  }, {passive:false});
+  function endTouch(){ start = null; locked = false; off(); }
+  box.addEventListener("touchend", endTouch);
+  box.addEventListener("touchcancel", endTouch);
+}
+
+/* ========================= portfolio tab ========================= */
+function renderChips(){
+  var html = '<button class="chip'+(state.acct==="all"?" on":"")+'" data-acct="all">All accounts</button>';
+  liveAccounts().forEach(function(a){
+    html += '<button class="chip'+(state.acct===a.id?" on":"")+'" data-acct="'+esc(a.id)+'">'+
+      '<span class="dot" style="background:'+acctColor(a.id)+'"></span>'+esc(a.name)+'</button>';
+  });
+  el("acctChips").innerHTML = html;
+  var bhtml = '<button class="chip'+(state.bAcct==="all"?" on":"")+'" data-bacct="all">All accounts</button>';
+  liveAccounts().forEach(function(a){
+    bhtml += '<button class="chip'+(state.bAcct===a.id?" on":"")+'" data-bacct="'+esc(a.id)+'">'+
+      '<span class="dot" style="background:'+acctColor(a.id)+'"></span>'+esc(a.name)+'</button>';
+  });
+  el("bAcctChips").innerHTML = bhtml;
+}
+
+function renderPortfolio(){
+  var hs = scoped(state.acct);
+  var total = sum(hs, val), cost = sum(hs, basis);
+  var dayAbs = sum(hs, function(h){ var p=h.price, prev = h.day ? p/(1+h.day/100) : p; return (p-prev)*h.shares; });
+  var dayPct = (total-dayAbs) ? dayAbs/(total-dayAbs)*100 : 0;
+  var gain = total - cost, gpct = cost ? gain/cost*100 : 0;
+  var income = sum(hs, function(h){ return val(h)*(h.yield||0)/100; });
+
+  el("todayAbs").innerHTML = '<span class="'+cls(dayAbs)+'">'+signed(dayAbs)+'</span>';
+  el("todayPct").innerHTML = '<span class="'+cls(dayPct)+'">'+pct(dayPct)+'</span>';
+  el("totalValue").textContent = usd(total);
+  el("totalCost").textContent = usd(cost);
+  el("totalGain").innerHTML = '<span class="'+cls(gain)+'">'+signed(gain)+'</span>';
+  el("returnPct").innerHTML = '<span class="'+cls(gpct)+'">'+pct(gpct)+'</span>';
+  el("incomeYear").textContent = usd(income);
+  el("incomeMonth").textContent = usd(income/12);
+  el("incomeYield").textContent = total ? (income/total*100).toFixed(2)+"% on value" : "";
+  el("incomeOnCost").textContent = cost ? (income/cost*100).toFixed(2)+"%" : "—";
+  var live = liveAccounts().length;
+  el("pSub").textContent = state.acct==="all"
+    ? "Across " + live + " account" + (live===1?"":"s")
+    : acctById(state.acct).name + (acctById(state.acct).firm ? " · "+acctById(state.acct).firm : "");
+  renderNetWorth();
+
+  /* today's movers, within scope, biggest absolute dollar move first */
+  var movers = hs.filter(function(h){ return h.day; })
+    .map(function(h){ var prev=h.price/(1+h.day/100); return {h:h, amt:(h.price-prev)*h.shares}; })
+    .sort(function(a,b){ return Math.abs(b.amt)-Math.abs(a.amt); }).slice(0,3);
+  todayMoverCount = movers.length;
+  el("todayMovers").innerHTML = movers.map(function(m){
+    return '<div class="row"><span class="dot" style="background:'+acctColor(m.h.acct)+'"></span>'+
+      '<div class="row-main"><div class="row-t">'+esc(m.h.tick)+' <span class="dim" style="font-weight:400">'+esc(m.h.name)+'</span></div></div>'+
+      '<div class="row-r"><div class="row-v '+cls(m.amt)+'">'+signed(m.amt)+'</div>'+
+      '<div class="row-d '+cls(m.h.day)+'">'+pct(m.h.day)+'</div></div></div>';
+  }).join("");
+  syncTodayCard();
+
+  /* holdings, biggest first */
+  var sorted = hs.slice().sort(function(a,b){ return val(b)-val(a); });
+  el("holdingsList").innerHTML = sorted.length ? sorted.map(function(h,i){
+    var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0;
+    var sub = (h.cls==="cash" ? acctById(h.acct).name : h.shares.toLocaleString("en-US",{maximumFractionDigits:4})+" × "+usd(h.price,2));
+    return '<button class="row" data-hold="'+i+'"><span class="dot" style="background:'+acctColor(h.acct)+'"></span>'+
+      '<div class="row-main"><div class="row-t">'+esc(h.cls==="cash"?h.name:h.tick)+
+      (h.cls==="cash"?"":' <span class="dim" style="font-weight:400">'+esc(h.name)+'</span>')+'</div>'+
+      '<div class="row-s">'+esc(sub)+'</div></div>'+
+      '<div class="row-r"><div class="row-v num">'+usd(val(h))+'</div>'+
+      '<div class="row-d num '+cls(gp)+'">'+pct(gp,1)+'</div></div><div class="chev"></div></button>';
+  }).join("") : '<div class="empty">Nothing in this account yet.<br>Tap Add to put something in it.</div>';
+  el("holdingsList").dataset.scope = state.acct;
+
+  el("updatedAt").textContent = "Updated " + state.updated.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+  state.scrubIndex = null;
+  paintHero();
+}
+
+/* Everything you own, priceless things included. Kept out of the portfolio
+   total on purpose: a house does not have a Tuesday. */
+function renderNetWorth(){
+  var off = offHoldings(), card = el("netWorthCard");
+  if (!off.length){ card.hidden = true; return; }
+  card.hidden = false;
+  var invested = sum(scoped("all"), val);
+  var rows = [{name:"Investments", sub:liveAccounts().length+" accounts", v:invested,
+               color:"var(--accent)", idx:-1}];
+  off.map(function(h,i){ return {h:h, i:i}; })
+     .sort(function(a,b){ return val(b.h)-val(a.h); })
+     .forEach(function(o){
+       rows.push({name:o.h.name, sub:CLASS_META[o.h.cls].label, v:val(o.h),
+                  color:CLASS_META[o.h.cls].color, idx:o.i});
+     });
+  var worth = 0;
+  rows.forEach(function(r){ worth += r.v; });
+  el("netWorthTotal").textContent = usd(worth);
+  el("netWorthRows").innerHTML = rows.map(function(r){
+    var money = r.v < 0 ? "−"+usd(-r.v) : usd(r.v);
+    var tag = r.idx < 0 ? "div" : "button";
+    return '<'+tag+' class="nw-r"'+(r.idx<0?"":' data-off="'+r.idx+'"')+'>'+
+      '<span class="dot" style="background:'+r.color+'"></span>'+
+      '<div class="nw-m"><div class="nw-n">'+esc(r.name)+'</div>'+
+      '<div class="nw-s">'+esc(r.sub)+'</div></div>'+
+      '<div class="nw-v num">'+money+'</div></'+tag+'>';
+  }).join("");
+}
+
+/* ========================= breakdown tab ========================= */
+function barRow(name, value, share, color, ring){
+  /* an account and an asset class can hold the same money on one screen -
+     the shape says which card you are reading, whatever the hue is */
+  var sw = ring ? '<span class="dot ring" style="border-color:'+color+'"></span>'
+                : '<span class="dot" style="background:'+color+'"></span>';
+  return '<div class="bar"><div class="bar-h">'+sw+
+    '<span class="bar-n">'+esc(name)+'</span>'+
+    '<span class="bar-v num">'+usd(value)+'</span>'+
+    '<span class="bar-p num">'+(share*100).toFixed(1)+'%</span></div>'+
+    '<div class="track"><div class="fill" style="width:'+Math.max(share*100,1.2).toFixed(2)+'%;background:'+color+'"></div></div></div>';
+}
+function buckets(hs, keyFn, metaFn){
+  var map = {};
+  hs.forEach(function(h){
+    var parts = keyFn(h);
+    for (var k in parts) map[k] = (map[k]||0) + parts[k];
+  });
+  var out = [];
+  for (var k in map) if (map[k] > 0.004) out.push({key:k, value:map[k]});
+  out.sort(function(a,b){ return b.value-a.value; });
+  return out;
+}
+
+/* A breakdown needs at least two things to break down. With one, the bar is
+   always 100% and says nothing the line above it did not; with none, the
+   section is about something this account does not hold. Neither earns a
+   card, so one of these decides it for every breakdown below. */
+function bdSect(key, on){
+  var n = document.querySelector('[data-bd="'+key+'"]');
+  if (n) n.hidden = !on;
+  return on;
+}
+function allOfIt(label){
+  return '<div class="empty in">All of it is '+esc(label)+'.</div>';
+}
+
+function renderBreakdown(){
+  var hs = scoped(state.bAcct);
+  var total = sum(hs, val) || 1;
+  el("bSub").textContent = (state.bAcct==="all" ? "What you own, by weight" : acctById(state.bAcct).name + " · " + usd(sum(hs,val)));
+
+  /* asset class - biggest to smallest */
+  var classes = buckets(hs, function(h){ var o={}; o[h.cls]=val(h); return o; });
+  bdSect("class", classes.length > 0);
+  el("classStack").hidden = classes.length < 2;
+  el("classBars").innerHTML = classes.length < 2
+    ? (classes.length ? allOfIt(CLASS_META[classes[0].key].label) : "")
+    : classes.map(function(b){
+        return barRow(CLASS_META[b.key].label, b.value, b.value/total, CLASS_META[b.key].color);
+      }).join("");
+  el("classStack").innerHTML = classes.map(function(b){
+    return '<span style="width:'+(b.value/total*100).toFixed(2)+'%;background:'+CLASS_META[b.key].color+'"></span>';
+  }).join("");
+
+  /* accounts - biggest to smallest */
+  var byAcct = buckets(hs, function(h){ var o={}; o[h.acct]=val(h); return o; });
+  if (bdSect("acct", byAcct.length > 1)){
+    el("acctBars").innerHTML = byAcct.map(function(b){
+      return barRow(acctById(b.key).name + " · " + acctById(b.key).firm, b.value, b.value/total, acctColor(b.key), true);
+    }).join("");
+  }
+
+  /* sectors - look-through, single-hue ramp so the order reads */
+  var eq = hs.filter(function(h){ return h.cls==="us_stock"||h.cls==="intl_stock"||h.cls==="real_estate"; });
+  var eqTotal = sum(eq, val) || 1;
+  var sec = buckets(eq, function(h){
+    var o={}, m = h.mix;
+    if (!m) { o["Not categorized"] = val(h); return o; }
+    for (var k in m) o[k] = val(h)*m[k];
+    return o;
+  });
+  if (bdSect("sector", sec.length > 0)){
+    el("sectorNote").textContent = sec.length > 1 ? sec.length+" of "+SECTORS.length+" sectors" : "";
+    el("sectorBars").innerHTML = sec.length > 1 ? sec.map(function(b,i){
+      return barRow(b.key, b.value, b.value/eqTotal, ramp("var(--c-indigo)", i, sec.length));
+    }).join("") : allOfIt(sec[0].key);
+  }
+
+  /* regions */
+  var reg = buckets(eq, function(h){
+    var o={}, m = h.region || {us:1};
+    for (var k in m) o[k] = val(h)*m[k];
+    return o;
+  });
+  function regionLabel(k){ return (REGION_META[k] || {label:k}).label; }
+  var showRegion = reg.length > 0;
+  el("bdFoot").hidden = !(sec.length > 0 || showRegion);
+  if (bdSect("region", showRegion)){
+    el("regionBars").innerHTML = reg.length > 1 ? reg.map(function(b){
+      var meta = REGION_META[b.key] || {label:b.key, color:"var(--c-gray)"};
+      return barRow(meta.label, b.value, b.value/eqTotal, meta.color);
+    }).join("") : allOfIt(regionLabel(reg[0].key));
+  }
+
+  /* crypto categories - ramp off the crypto hue */
+  var cr = hs.filter(function(h){ return h.cls==="crypto"; });
+  var crTotal = sum(cr, val) || 1;
+  var cats = buckets(cr, function(h){ var o={}; o[h.cat || "Other crypto"] = val(h); return o; });
+  if (bdSect("crypto", cats.length > 0)){
+    el("cryptoBars").innerHTML = cats.length > 1 ? cats.map(function(b,i){
+      return barRow(b.key, b.value, b.value/crTotal, ramp("var(--c-orange)", i, cats.length));
+    }).join("") : allOfIt(cats[0].key);
+  }
+
+  /* leaders and laggards by return since purchase */
+  var perf = hs.filter(function(h){ return h.cls!=="cash" && basis(h)>0; })
+    .map(function(h){ return {h:h, p:(val(h)-basis(h))/basis(h)*100, g:val(h)-basis(h)}; })
+    .sort(function(a,b){ return b.p-a.p; });
+  function perfRows(arr){
+    return arr.length ? arr.map(function(r){
+      return '<div class="row"><span class="dot" style="background:'+acctColor(r.h.acct)+'"></span>'+
+        '<div class="row-main"><div class="row-t">'+esc(r.h.tick)+' <span class="dim" style="font-weight:400">'+esc(r.h.name)+'</span></div>'+
+        '<div class="row-s">'+esc(acctById(r.h.acct).name)+'</div></div>'+
+        '<div class="row-r"><div class="row-v num '+cls(r.p)+'">'+pct(r.p,1)+'</div>'+
+        '<div class="row-d num dim">'+signed(r.g)+'</div></div></div>';
+    }).join("") : '<div class="empty">Nothing to rank yet.</div>';
+  }
+  /* never let the same holding appear in both cards - with fewer than four
+     positions there is no top and bottom to speak of, so show one ranked list */
+  var top = Math.min(5, Math.floor(perf.length/2));
+  if (top >= 2){
+    el("perfSect").textContent = "Leaders & laggards";
+    el("bestTitle").textContent = "Best";
+    el("worstCard").hidden = false;
+    el("bestList").innerHTML  = perfRows(perf.slice(0, top));
+    el("worstList").innerHTML = perfRows(perf.slice(-top).reverse());
+  } else {
+    el("perfSect").textContent = "Returns";
+    el("bestTitle").textContent = "By return";
+    el("worstCard").hidden = true;
+    el("worstList").innerHTML = "";
+    el("bestList").innerHTML = perfRows(perf);
+  }
+}
+
+/* ========================= markets tab ========================= */
+function sparkPath(seed, d){
+  var pts = walk(seed, 34, .011, 100, 100*(1+d/100)), i;
+  var lo=Math.min.apply(null,pts), hi=Math.max.apply(null,pts), span=(hi-lo)||1, out="";
+  for(i=0;i<pts.length;i++){
+    out += (i?"L":"M") + (i/(pts.length-1)*100).toFixed(2) + " " + (2 + (1-(pts[i]-lo)/span)*26).toFixed(2) + " ";
+  }
+  return out.trim();
+}
+function renderMarkets(){
+  el("mktChips").innerHTML = MKT_ORDER.map(function(k){
+    return '<button class="chip'+(state.market===k?" on":"")+'" data-mkt="'+k+'">'+MARKETS[k].title+'</button>';
+  }).join("");
+
+  /* the grid is the category you picked, biggest mover first */
+  var grp = MARKETS[state.market];
+  var gridRows = grp.rows.slice().sort(function(a,b){ return b.d-a.d; });
+  el("mktGrid").innerHTML = gridRows.map(function(r,i){
+    var c = r.d>=0 ? "var(--pos)" : "var(--neg)";
+    var v = r.pct ? r.v.toFixed(2)+"%"
+                  : r.v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+    var d = r.pct ? (r.d>=0?"+":"−")+Math.abs(r.d).toFixed(2)+" pp" : pct(r.d);
+    /* an odd count would otherwise leave the last card orphaned beside a gap */
+    var wide = (i === gridRows.length-1 && gridRows.length % 2) ? " wide" : "";
+    return '<div class="mcard'+wide+'"><div class="mcard-head">'+
+      '<div class="mcard-name">'+esc(r.n)+'</div><div class="mcard-sub">'+esc(r.s)+'</div></div>'+
+      '<div class="spark"><svg viewBox="0 0 100 30" preserveAspectRatio="none"><path d="'+sparkPath(r.s+state.market,r.d)+
+      '" fill="none" stroke="'+c+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg></div>'+
+      '<div class="mcard-foot"><div class="mcard-v num">'+v+'</div>'+
+      '<div class="mcard-d num '+cls(r.d)+'">'+d+'</div></div></div>';
+  }).join("");
+
+  /* the movers look across every category, so they never repeat the grid.
+     The sub-line names the market the row came from, not its trading code. */
+  var all = [];
+  MKT_ORDER.forEach(function(key){
+    MARKETS[key].rows.forEach(function(r){ all.push({r:r, from:MARKETS[key].title}); });
+  });
+  all.sort(function(a,b){ return b.r.d-a.r.d; });
+  function mrow(x){
+    var r = x.r;
+    var d = r.pct ? (r.d>=0?"+":"−")+Math.abs(r.d).toFixed(2)+" pp" : pct(r.d);
+    var v = r.pct ? r.v.toFixed(2)+"%" : r.v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+    return '<div class="row"><div class="row-main"><div class="row-t">'+esc(r.n)+'</div>'+
+      '<div class="row-s">'+esc(x.from)+'</div></div>'+
+      '<div class="row-r"><div class="row-v num">'+v+'</div><div class="row-d num '+cls(r.d)+'">'+d+'</div></div></div>';
+  }
+  el("mktUp").innerHTML   = all.slice(0,5).map(mrow).join("");
+  el("mktDown").innerHTML = all.slice(-5).reverse().map(mrow).join("");
+
+  var hour = state.updated.getHours();
+  var open = hour>=9 && hour<16;
+  el("mktSession").textContent = open ? "US market open" : "US market closed";
+  el("mktClock").textContent = state.updated.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+}
+
+/* ========================= settings tab ========================= */
+function renderSettings(){
+  el("acctManage").innerHTML = ACCOUNTS.map(function(a){
+    var v = sum(HOLDINGS.filter(function(h){return h.acct===a.id;}), val);
+    var n = HOLDINGS.filter(function(h){return h.acct===a.id;}).length;
+    return '<button class="row" data-editacct="'+esc(a.id)+'">'+
+      '<span class="dot" style="background:'+acctColor(a.id)+'"></span>'+
+      '<div class="row-main"><div class="row-t">'+esc(a.name)+'</div>'+
+      '<div class="row-s">'+esc(a.firm||"No institution")+' · '+n+' holding'+(n===1?"":"s")+
+        (a.off ? ' · not in the portfolio total' : '')+'</div></div>'+
+      '<div class="row-r"><div class="row-v num">'+usd(v)+'</div></div><div class="chev"></div></button>';
+  }).join("") || '<div class="empty">No accounts yet.</div>';
+
+  el("themeSeg").innerHTML = [["system","System"],["light","Light"],["dark","Dark"]].map(function(t){
+    return '<button data-theme="'+t[0]+'"'+(state.theme===t[0]?' class="on"':'')+'>'+t[1]+'</button>';
+  }).join("");
+
+  var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  var ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  el("installHow").textContent = standalone
+    ? "Basis is running from your Home Screen."
+    : ios ? "In Safari, tap the Share button, then Add to Home Screen. It opens full screen, with no address bar."
+          : "Open your browser menu and choose Install, or Add to Home Screen.";
+
+  el("dataCard").innerHTML =
+    '<div class="row"><div class="row-main"><div class="row-t">Holdings stored</div>'+
+    '<div class="row-s">On this device only</div></div>'+
+    '<div class="row-r"><div class="row-v num">'+HOLDINGS.length+' holding'+(HOLDINGS.length===1?"":"s")+'</div></div></div>'+
+    '<button class="row" data-reset="1"><div class="row-main">'+
+    '<div class="row-t" style="color:var(--neg)">Reset to the example portfolio</div>'+
+    '<div class="row-s">Removes everything you have entered</div></div></button>';
+}
+
+/* ========================= sheets ========================= */
+var sheetState = {};
+var lockedY = 0;
+function openSheet(title, html, after){
+  el("sheetTitle").textContent = title;
+  el("sheetBody").innerHTML = html;
+  /* the page behind a sheet must not scroll, or the sheet is only a picture
+     of a modal - fixing the body keeps the scroll position to put back */
+  if (!document.body.classList.contains("locked")){
+    lockedY = window.scrollY;
+    document.body.style.top = (-lockedY)+"px";
+    document.body.classList.add("locked");
+  }
+  el("app").setAttribute("aria-hidden","true");
+  el("scrim").classList.add("on");
+  el("sheet").classList.add("on");
+  el("sheet").style.transform = "";
+  if (after) after();
+  /* put the reader inside the dialog, not behind it. Never a text field -
+     on iOS that raises the keyboard, and the viewport it leaves behind makes
+     every later tap land somewhere else. */
+  try { el("sheetClose").focus({preventScroll:true}); } catch(err){}
+}
+function closeSheet(){
+  try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(err){}
+  el("scrim").classList.remove("on");
+  el("sheet").classList.remove("on");
+  el("sheet").classList.remove("drag");
+  el("sheet").style.transform = "";
+  el("app").removeAttribute("aria-hidden");
+  if (document.body.classList.contains("locked")){
+    document.body.classList.remove("locked");
+    document.body.style.top = "";
+    window.scrollTo(0, lockedY);
+  }
+  setTimeout(function(){ if(!el("sheet").classList.contains("on")) el("sheetBody").innerHTML=""; }, 320);
+}
+/* the grabber is the universal "drag me down" signal - make it do that */
+(function(){
+  var grip = document.querySelector(".grip"), sheet = el("sheet");
+  var y0 = null, dy = 0, t0 = 0;
+  grip.addEventListener("touchstart", function(e){
+    y0 = e.touches[0].clientY; dy = 0; t0 = Date.now();
+    sheet.classList.add("drag");
+  }, {passive:true});
+  grip.addEventListener("touchmove", function(e){
+    if (y0 === null) return;
+    e.preventDefault();
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    sheet.style.transform = "translateY("+dy+"px)";
+  }, {passive:false});
+  function end(){
+    if (y0 === null) return;
+    var flick = dy > 40 && (Date.now()-t0) < 260;
+    y0 = null;
+    sheet.classList.remove("drag");
+    sheet.style.transform = "";
+    if (dy > 120 || flick) closeSheet();
+  }
+  grip.addEventListener("touchend", end);
+  grip.addEventListener("touchcancel", end);
+})();
+function toast(msg, undo){
+  var t = el("toast");
+  clearTimeout(toast._t);
+  if (undo){
+    t.innerHTML = '<span>'+esc(msg)+'</span><button class="toast-u" id="toastUndo">Undo</button>';
+    t.classList.add("act");
+    el("toastUndo").addEventListener("click", function(){
+      clearTimeout(toast._t); t.classList.remove("on","act"); undo();
+    });
+    toast._t = setTimeout(function(){ t.classList.remove("on","act"); }, 6000);
+  } else {
+    t.textContent = msg; t.classList.remove("act");
+    toast._t = setTimeout(function(){ t.classList.remove("on"); }, 2100);
+  }
+  t.classList.add("on");
+}
+
+/* nothing destructive happens on a single tap: either it is confirmed here,
+   or the toast that follows can put it back */
+function confirmAction(title, body, label, onYes){
+  openSheet(title,
+    '<div class="note" style="margin:var(--s-2) var(--s-1) var(--s-7)">'+esc(body)+'</div>'+
+    '<button class="btn warn" id="cfYes" style="margin-top:0">'+esc(label)+'</button>'+
+    '<button class="btn ghost" id="cfNo">Cancel</button>', function(){
+      el("cfYes").addEventListener("click", function(){ closeSheet(); onYes(); });
+      el("cfNo").addEventListener("click", closeSheet);
+    });
+}
+
+function removeHolding(h, label){
+  var i = HOLDINGS.indexOf(h);
+  if (i<0) return;
+  HOLDINGS.splice(i,1);
+  save(); renderAll(); closeSheet();
+  toast(label+" removed", function(){
+    HOLDINGS.splice(Math.min(i, HOLDINGS.length), 0, h);
+    save(); renderAll(); toast(label+" is back");
+  });
+}
+function fieldText(id,label,ph,value,type){
+  return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label>'+
+    '<input id="'+id+'" type="'+(type||"text")+'" placeholder="'+esc(ph)+'" value="'+esc(value===undefined?"":value)+'"'+
+    (type==="number"?' inputmode="decimal"':'')+'></div>';
+}
+function fieldSelect(id,label,opts,sel){
+  return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label><select id="'+id+'">'+
+    opts.map(function(o){ return '<option value="'+esc(o[0])+'"'+(o[0]===sel?" selected":"")+'>'+esc(o[1])+'</option>'; }).join("")+
+    '</select></div>';
+}
+function swatchRow(sel){
+  return '<div class="swatches" id="swatches">'+SWATCHES.map(function(s){
+    return '<button class="sw'+(s.k===sel?" on":"")+'" data-sw="'+s.k+'" style="background:'+s.v+'" aria-label="'+s.k+'"></button>';
+  }).join("")+'</div>';
+}
+
+function sheetAddMenu(){
+  openSheet("Add", '<div class="card" style="margin-top:var(--s-2)">'+
+    '<button class="row" data-sheet="holding"><div class="row-main"><div class="row-t">A holding</div>'+
+    '<div class="row-s">One symbol, shares and cost</div></div><div class="chev"></div></button>'+
+    '<button class="row" data-sheet="account"><div class="row-main"><div class="row-t">An account</div>'+
+    '<div class="row-s">Another brokerage, IRA, wallet or bank</div></div><div class="chev"></div></button>'+
+    '<button class="row" data-sheet="import"><div class="row-main"><div class="row-t">A list of holdings</div>'+
+    '<div class="row-s">Paste rows from a spreadsheet or export</div></div><div class="chev"></div></button>'+
+    '<button class="row" data-sheet="scan"><div class="row-main"><div class="row-t">A photo of a statement</div>'+
+    '<div class="row-s">Capture now, type the numbers in</div></div><div class="chev"></div></button>'+
+    '</div><div class="card" style="margin-top:var(--s-5)">'+
+    '<button class="row" data-sheet="offAsset"><div class="row-main"><div class="row-t">Something you own</div>'+
+    '<div class="row-s">A home, a car, a collectible or a loan</div></div><div class="chev"></div></button>'+
+    '</div><div class="note">Things you own outside the market count towards net worth, not the portfolio.</div>');
+}
+
+function sheetAccount(editId){
+  var a = editId ? acctById(editId) : {name:"",firm:"",color:SWATCHES[ACCOUNTS.length % SWATCHES.length].k};
+  sheetState.color = a.color;
+  var html = '<div class="card" style="margin-top:var(--s-2)">'+
+    fieldText("fName","Name","Brokerage", a.name)+
+    fieldText("fFirm","Institution","Fidelity", a.firm)+
+    '</div><div class="sect" style="margin-top:var(--s-7)">Color</div>'+
+    '<div class="card">'+swatchRow(a.color)+'</div>'+
+    '<div class="err" id="fErr"></div>'+
+    '<button class="btn" id="fSave">'+(editId?"Save account":"Add account")+'</button>'+
+    (editId ? '<button class="btn warn" id="fDel">Delete account</button>' : '')+
+    (editId ? '<div class="note">Deleting an account also removes its holdings.</div>' : '');
+  openSheet(editId ? "Edit account" : "New account", html, function(){
+    el("swatches").addEventListener("click", function(e){
+      var b = e.target.closest("[data-sw]"); if(!b) return;
+      sheetState.color = b.dataset.sw;
+      [].forEach.call(this.querySelectorAll(".sw"), function(x){ x.classList.toggle("on", x===b); });
+    });
+    el("fSave").addEventListener("click", function(){
+      var name = el("fName").value.trim();
+      if(!name){ el("fErr").textContent = "Give the account a name."; return; }
+      if (editId){
+        var a2 = acctById(editId); a2.name = name; a2.firm = el("fFirm").value.trim(); a2.color = sheetState.color;
+      } else {
+        var id = "a"+Date.now().toString(36);
+        ACCOUNTS.push({id:id, name:name, firm:el("fFirm").value.trim(), color:sheetState.color});
+      }
+      save(); renderAll(); closeSheet(); toast(editId ? "Account saved" : "Account added");
+    });
+    if (editId) el("fDel").addEventListener("click", function(){
+      HOLDINGS = HOLDINGS.filter(function(h){ return h.acct !== editId; });
+      ACCOUNTS = ACCOUNTS.filter(function(x){ return x.id !== editId; });
+      if (state.acct===editId) state.acct="all";
+      if (state.bAcct===editId) state.bAcct="all";
+      save(); renderAll(); closeSheet(); toast("Account deleted");
+    });
+  });
+}
+
+var CLASS_OPTS = [["us_stock","US stock or fund"],["intl_stock","International stock or fund"],
+  ["crypto","Crypto"],["bond","Bond or treasury"],["real_estate","Real estate"],["cash","Cash"],
+  ["property","Property (home, land)"],["vehicle","Vehicle"],["collectible","Collectible"],
+  ["other","Other asset"],["loan","Loan or mortgage"]];
+
+function sheetHolding(preset, edit){
+  if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
+  /* a fund spreads over many sectors or regions. The form only offers one of
+     each, so editing anything else about such a holding must leave them be. */
+  var spread = edit && edit.mix && Object.keys(edit.mix).length > 1;
+  var abs = function(v){ return Math.abs(v||0) || ""; };
+  var offAcct = (ACCOUNTS.filter(function(a){ return a.off; })[0] || ACCOUNTS[0]).id;
+  var acctOpts = ACCOUNTS.map(function(a){ return [a.id, a.name + (a.firm?" · "+a.firm:"")]; });
+  var secOpts = [["","Not set"]].concat(SECTORS.map(function(s){ return [s,s]; }));
+  if (spread) secOpts.unshift(["__keep","Fund, many sectors"]);
+  var catOpts = CRYPTO_CATS.concat(["Other crypto"]).map(function(s){ return [s,s]; });
+  var html = '<div class="card" style="margin-top:var(--s-2)">'+
+    fieldSelect("fAcct","Account", acctOpts, edit ? edit.acct : preset ? offAcct : (state.acct!=="all"?state.acct:ACCOUNTS[0].id))+
+    fieldSelect("fCls","Type", CLASS_OPTS, edit ? edit.cls : preset || "us_stock")+
+    fieldText("fTick","Symbol","VTI", edit && !OFF[edit.cls] ? edit.tick : "")+
+    fieldText("fName2","Name","Vanguard Total Stock Market", edit ? edit.name : "")+
+    '</div><div class="card" style="margin-top:var(--s-5)">'+
+    fieldText("fSh","Shares","100", edit && !OFF[edit.cls] ? String(edit.shares) : "","number")+
+    fieldText("fPx","Price now","312.44", edit ? String(abs(edit.price)) : "","number")+
+    fieldText("fCb","Cost per share","214.80", edit ? String(abs(edit.cost)) : "","number")+
+    fieldText("fBought","Bought","", edit && edit.bought ? edit.bought : "","date")+
+    fieldText("fY","Yield %","1.21", edit && edit.yield ? String(edit.yield) : "","number")+
+    '</div><div class="card" style="margin-top:var(--s-5)">'+
+    fieldSelect("fSec","Sector", secOpts, spread ? "__keep" : edit && edit.mix ? Object.keys(edit.mix)[0] : "")+
+    fieldSelect("fCat","Crypto category", catOpts, edit && edit.cat ? edit.cat : "Store of Value")+
+    '</div>'+
+    '<div class="err" id="fErr"></div>'+
+    '<button class="btn" id="fSave">'+(edit?"Save changes":preset?"Add it":"Add holding")+'</button>'+
+    '<div class="note">Cost per share is what you paid. Leave it blank and it uses the price you entered. The date you bought it is optional - it places the holding on the chart.</div>';
+  openSheet(edit ? "Edit "+(OFF[edit.cls] ? edit.name : edit.tick) :
+            preset ? "Something you own" : "New holding", html, function(){
+    function relabel(id,txt){ var l = document.querySelector('label[for="'+id+'"]'); if(l) l.textContent = txt; }
+    function sync(){
+      var c = el("fCls").value, off = !!OFF[c];
+      el("wrap-fSec").style.display = (c==="us_stock"||c==="intl_stock"||c==="real_estate") ? "" : "none";
+      el("wrap-fCat").style.display = (c==="crypto") ? "" : "none";
+      el("wrap-fTick").style.display = off ? "none" : "";
+      el("wrap-fSh").style.display   = off ? "none" : "";
+      el("wrap-fY").style.display    = off ? "none" : "";
+      el("wrap-fBought").style.display = off ? "none" : "";
+      relabel("fName2", off ? "What is it" : "Name");
+      relabel("fPx", off ? (c==="loan" ? "Balance owed" : "Worth today") : "Price now");
+      relabel("fCb", off ? "What you paid" : "Cost per share");
+      el("fName2").placeholder = off ? "Home" : "Vanguard Total Stock Market";
+      el("fPx").placeholder = off ? (c==="loan" ? "142000" : "165000") : "312.44";
+      el("fCb").placeholder = off ? "148000" : "214.80";
+    }
+    el("fCls").addEventListener("change", sync); sync();
+    el("fSave").addEventListener("click", function(){
+      var tick = el("fTick").value.trim().toUpperCase();
+      var sh = parseFloat(el("fSh").value), px = parseFloat(el("fPx").value);
+      var cb = parseFloat(el("fCb").value), y = parseFloat(el("fY").value);
+      var kind = el("fCls").value;
+      if (OFF[kind]){
+        var label = el("fName2").value.trim();
+        if (!label){ el("fErr").textContent = "Give it a name."; return; }
+        if (!(Math.abs(px)>0)){ el("fErr").textContent = "Enter what it is worth."; return; }
+        var worth = kind==="loan" ? -Math.abs(px) : px;
+        var paid  = (isFinite(cb) && cb!==0) ? (kind==="loan" ? -Math.abs(cb) : cb) : worth;
+        var off = {acct:el("fAcct").value, tick:label.slice(0,10).toUpperCase(), name:label,
+          cls:kind, shares:1, price:worth, cost:paid, day:0, yield:0};
+        if (edit){
+          /* an on-market holding turned into one of these drops what no longer applies */
+          delete edit.mix; delete edit.cat; delete edit.region; delete edit.bought; delete edit.held;
+          Object.keys(off).forEach(function(k){ edit[k] = off[k]; });
+          save(); renderAll(); closeSheet(); toast(label+" updated"); return;
+        }
+        HOLDINGS.push(off);
+        save(); renderAll(); closeSheet(); toast(label+" added"); return;
+      }
+      if (!tick){ el("fErr").textContent = "Enter a symbol."; return; }
+      if (!(sh>0)){ el("fErr").textContent = "Enter how many shares you hold."; return; }
+      if (!(px>0)){ el("fErr").textContent = "Enter the current price."; return; }
+      var c = el("fCls").value;
+      var rec = edit || {};
+      rec.acct = el("fAcct").value; rec.tick = tick; rec.name = el("fName2").value.trim()||tick;
+      rec.cls = c; rec.shares = sh; rec.price = px; rec.cost = (cb>0?cb:px);
+      rec.day = rec.day || 0; rec.yield = (y>0?y:0);
+      if (c==="us_stock"||c==="intl_stock"||c==="real_estate"){
+        var sv = el("fSec").value;
+        if (sv === "__keep"){ /* the fund keeps the sector split it came with */ }
+        else if (sv) rec.mix = one(sv);
+        else delete rec.mix;
+        /* a fund spread over several regions keeps that spread */
+        if (!rec.region || Object.keys(rec.region).length < 2)
+          rec.region = c==="intl_stock" ? {developed:1} : {us:1};
+      } else { delete rec.mix; delete rec.region; }
+      if (c==="crypto") rec.cat = el("fCat").value; else delete rec.cat;
+      var bought = el("fBought").value;
+      if (bought && new Date(bought+"T00:00:00") < TODAY) rec.bought = bought;
+      else delete rec.bought;
+      if (edit){ save(); renderAll(); closeSheet(); toast(tick+" updated"); return; }
+      HOLDINGS.push(rec); save(); renderAll(); closeSheet(); toast(tick+" added");
+    });
+  });
+}
+
+function sheetOffDetail(idx){
+  var h = offHoldings()[idx]; if(!h) return;
+  var worth = val(h), paid = basis(h), g = worth - paid;
+  function money(v){ return v<0 ? "−"+usd(-v) : usd(v); }
+  function line(k,v){ return '<div class="row"><div class="row-main"><div class="row-t">'+k+
+    '</div></div><div class="row-r"><div class="row-v num">'+v+'</div></div></div>'; }
+  openSheet(h.name, '<div class="card" style="margin-top:var(--s-2)">'+
+    line("Type", esc(CLASS_META[h.cls].label))+
+    line(h.cls==="loan" ? "Balance owed" : "Worth today", money(worth))+
+    line("What you paid", money(paid))+
+    line("Change", '<span class="'+cls(g)+'">'+(g>=0?"+":"−")+usd(Math.abs(g))+'</span>')+
+    '</div><button class="btn ghost" id="offEdit">Edit</button>'+
+    '<button class="btn warn" id="offDel">Remove</button>'+
+    '<div class="note">Kept out of the portfolio total and the chart. It counts towards net worth.</div>',
+    function(){
+      el("offEdit").addEventListener("click", function(){ sheetHolding(null, h); });
+      el("offDel").addEventListener("click", function(){ removeHolding(h, h.name); });
+    });
+}
+
+function sheetHoldDetail(idx){
+  var hs = scoped(el("holdingsList").dataset.scope || "all");
+  var sorted = hs.slice().sort(function(a,b){ return val(b)-val(a); });
+  var h = sorted[idx]; if(!h) return;
+  var g = val(h)-basis(h), gp = basis(h)?g/basis(h)*100:0;
+  var inc = val(h)*(h.yield||0)/100;
+  function line(k,v){ return '<div class="row"><div class="row-main"><div class="row-t">'+k+
+    '</div></div><div class="row-r"><div class="row-v num">'+v+'</div></div></div>'; }
+  openSheet(h.tick, '<div class="card" style="margin-top:var(--s-2)">'+
+    line("Account", esc(acctById(h.acct).name))+
+    line("Type", esc(CLASS_META[h.cls].label))+
+    (h.cls==="cash" ? "" : line("Shares", h.shares.toLocaleString("en-US",{maximumFractionDigits:6})))+
+    (h.cls==="cash" ? "" : line("Price", usd(h.price,2)))+
+    (h.cls==="cash" ? "" : line("Cost per share", usd(h.cost,2)))+
+    '</div><div class="card" style="margin-top:var(--s-5)">'+
+    line("Value", usd(val(h)))+
+    line("Invested", usd(basis(h)))+
+    line("Gain", '<span class="'+cls(g)+'">'+signed(g)+" ("+pct(gp,1)+')</span>')+
+    (h.yield ? line("Per year", usd(inc)) : "")+
+    (h.mix ? line("Sector", esc(Object.keys(h.mix).length===1?Object.keys(h.mix)[0]:"Fund, many sectors")) : "")+
+    (h.cat ? line("Crypto category", esc(h.cat)) : "")+
+    '</div><button class="btn ghost" id="fEdit">Edit holding</button>'+
+    '<button class="btn warn" id="fDel">Remove holding</button>', function(){
+      el("fEdit").addEventListener("click", function(){ sheetHolding(null, h); });
+      el("fDel").addEventListener("click", function(){ removeHolding(h, h.tick); });
+    });
+}
+
+/* ========================= import pipeline =========================
+   One path for every way holdings arrive - a pasted list, a photographed
+   statement, a screenshot. Read it into rows, work out what each row would do
+   to the portfolio, show that, and only then write anything. */
+
+var TYPEMAP = {stock:"us_stock", us:"us_stock", equity:"us_stock", etf:"us_stock", fund:"us_stock",
+  intl:"intl_stock", international:"intl_stock", crypto:"crypto", coin:"crypto",
+  bond:"bond", treasury:"bond", reit:"real_estate", "real estate":"real_estate",
+  property:"real_estate", cash:"cash"};
+
+function num(t){
+  var v = parseFloat(String(t).replace(/[^0-9.\-]/g, ""));
+  return isFinite(v) ? v : NaN;
+}
+
+/* Rows arrive in two shapes. A spreadsheet export is delimited, so the columns
+   can be trusted. A photograph is not, so take the symbol and then the numbers
+   in the order they appear - which is how every statement prints them. */
+function parseRows(text){
+  var rows = [], skipped = 0;
+  text.split(/\r?\n/).forEach(function(line){
+    var ln = line.trim();
+    if (!ln) return;
+    /* a thousands separator is not a column break */
+    var flat = ln.replace(/(\d),(?=\d{3}(\D|$))/g, "$1");
+    var parts, delimited = /[\t,;|]/.test(flat);
+    if (delimited) parts = flat.split(/[\t,;|]+/);
+    else           parts = flat.split(/\s+/);
+    parts = parts.map(function(t){ return t.trim().replace(/^["']|["']$/g, ""); }).filter(Boolean);
+    if (!parts.length) return;
+
+    /* a ticker is written in capitals, so prefer one of those over the first
+       word of a fund's name - statements print the symbol either side of it */
+    var tick = "", cls = "", nums = [];
+    for (var j = 0; j < parts.length; j++)
+      if (/^[A-Z][A-Z0-9.\-]{0,9}$/.test(parts[j]) && !TYPEMAP[parts[j].toLowerCase()]) { tick = parts[j]; break; }
+    parts.forEach(function(t) {
+      var low = t.toLowerCase().replace(/[^a-z ]/g, "");
+      if (t === tick) return;
+      if (!tick && /^[A-Za-z][A-Za-z0-9.\-]{0,9}$/.test(t) && !TYPEMAP[low]) { tick = t.toUpperCase(); return; }
+      if (TYPEMAP[low]) { cls = cls || TYPEMAP[low]; return; }
+      var v = num(t);
+      /* a percentage or a date column is not a quantity */
+      if (isFinite(v) && !/%/.test(t) && !/^\d{1,2}\/\d{1,2}/.test(t)) nums.push(v);
+    });
+
+    if (!tick || nums.length < 2 || nums[0] <= 0 || nums[1] <= 0) { skipped++; return; }
+    /* Only a list with real columns can say which one is the cost. On a
+       photographed statement the third figure is nearly always the position's
+       value or its day change, and reading it as a basis would invent a
+       loss - so take the symbol, the shares and the price, and no more. */
+    var cost = NaN;
+    if (delimited && nums.length > 2 && nums[2] > 0) cost = nums[2];
+    /* and if that column is the value after all, it is not a basis */
+    if (isFinite(cost) && Math.abs(cost - nums[0] * nums[1]) < nums[0] * nums[1] * 0.02) cost = NaN;
+    rows.push({tick:tick, shares:nums[0], price:nums[1],
+      cost:(isFinite(cost) ? cost : nums[1]), hasCost:isFinite(cost), cls:cls});
+  });
+  return {rows:rows, skipped:skipped};
+}
+
+function findHolding(acct, tick){
+  for (var i = 0; i < HOLDINGS.length; i++)
+    if (HOLDINGS[i].acct === acct && HOLDINGS[i].tick === tick) return HOLDINGS[i];
+  return null;
+}
+
+/* What each row would do. A symbol you hold in another account stays its own
+   row here - Brokerage: 5 and Roth: 3 total 8 without pretending to be one
+   position, which is the whole point of tracking accounts separately. */
+function buildPlan(rows, acct){
+  return rows.map(function(r){
+    var cur = findHolding(acct, r.tick);
+    var kind = !cur ? "new" : (Math.abs(cur.shares - r.shares) < 1e-9 ? "same" : "update");
+    return {row:r, cur:cur, kind:kind, on:(kind !== "same")};
+  });
+}
+
+function newRecord(r, acct){
+  var c = r.cls || "us_stock";
+  var rec = {acct:acct, tick:r.tick, name:r.tick, cls:c, shares:r.shares,
+    price:r.price, cost:r.cost, day:0, yield:0};
+  if (c === "us_stock" || c === "real_estate") rec.region = {us:1};
+  if (c === "intl_stock") rec.region = {developed:1};
+  if (c === "crypto") rec.cat = "Other crypto";
+  return rec;
+}
+
+function applyPlan(plan, acct){
+  var added = 0, updated = 0;
+  plan.forEach(function(p){
+    if (!p.on) return;
+    var r = p.row;
+    if (p.cur){
+      var cur = p.cur;
+      if (r.hasCost){
+        cur.cost = r.cost;                       /* the statement knows the basis */
+      } else if (r.shares > cur.shares){
+        var bought = r.shares - cur.shares;      /* a top-up at today's price */
+        cur.cost = (cur.shares * cur.cost + bought * r.price) / r.shares;
+      }                                          /* a trim leaves cost per share alone */
+      cur.shares = r.shares;
+      if (isFinite(r.price) && r.price > 0) cur.price = r.price;
+      updated++;
+    } else {
+      HOLDINGS.push(newRecord(r, acct));
+      added++;
+    }
+  });
+  return {added:added, updated:updated};
+}
+
+function shrTxt(n){ return n.toLocaleString("en-US",{maximumFractionDigits:6}); }
+function planLabel(p){
+  var r = p.row, n = shrTxt(r.shares);
+  if (p.kind === "new")    return "New · " + n + " shares at " + usd(r.price,2);
+  if (p.kind === "same")   return "Already have this · " + n + " shares";
+  return shrTxt(p.cur.shares) + " → " + n + " shares · " + usd(r.price,2);
+}
+
+function sheetReview(rows, skipped, acct, back){
+  if (!rows.length){
+    toast("Nothing could be read");
+    if (back) back();
+    return;
+  }
+  var plan = buildPlan(rows, acct), a = acctById(acct);
+
+  function counts(){
+    var n = 0, u = 0;
+    plan.forEach(function(p){ if (p.on) { p.cur ? u++ : n++; } });
+    return {n:n, u:u};
+  }
+  function label(){
+    var c = counts();
+    if (!c.n && !c.u) return "Nothing selected";
+    var bits = [];
+    if (c.n) bits.push("Add " + c.n);
+    if (c.u) bits.push("update " + c.u);
+    return bits.join(", ").replace(/^./, function(m){ return m.toUpperCase(); });
+  }
+  function rowsHtml(){
+    return plan.map(function(p, i){
+      return '<button class="row' + (p.on ? "" : " off") + '" data-rv="' + i + '">' +
+        '<div class="pick' + (p.on ? " on" : "") + '"></div>' +
+        '<div class="row-main"><div class="row-t">' + esc(p.row.tick) + '</div>' +
+        '<div class="row-s">' + esc(planLabel(p)) + '</div></div></button>';
+    }).join("");
+  }
+
+  openSheet("Review",
+    '<div class="note" style="margin:var(--s-2) var(--s-1) 0">Into ' +
+      esc(a.name) + (a.firm ? " · " + esc(a.firm) : "") + '. Nothing is saved until you confirm.' +
+      (skipped ? " " + skipped + (skipped === 1 ? " line was" : " lines were") + " not readable." : "") +
+    '</div>' +
+    '<div class="sect">' + plan.length + (plan.length === 1 ? " holding" : " holdings") + '</div>' +
+    '<div class="card" id="rvList">' + rowsHtml() + '</div>' +
+    '<button class="btn" id="rvGo" style="margin-top:var(--s-7)">' + label() + '</button>' +
+    '<button class="btn ghost" id="rvBack">Back</button>',
+    function(){
+      el("rvList").addEventListener("click", function(e){
+        var t = e.target.closest("[data-rv]");
+        if (!t) return;
+        var p = plan[+t.dataset.rv];
+        p.on = !p.on;
+        t.classList.toggle("off", !p.on);
+        t.querySelector(".pick").classList.toggle("on", p.on);
+        el("rvGo").textContent = label();
+      });
+      el("rvGo").addEventListener("click", function(){
+        var r = applyPlan(plan, acct);
+        if (!r.added && !r.updated){ toast("Nothing selected"); return; }
+        save(); renderAll(); closeSheet();
+        var bits = [];
+        if (r.added) bits.push(r.added + " added");
+        if (r.updated) bits.push(r.updated + " updated");
+        toast(bits.join(", "));
+      });
+      el("rvBack").addEventListener("click", function(){ back ? back() : closeSheet(); });
+    });
+}
+
+function acctOptions(){
+  return ACCOUNTS.map(function(a){ return [a.id, a.name + (a.firm ? " · " + a.firm : "")]; });
+}
+function defaultAcct(){ return state.acct !== "all" ? state.acct : ACCOUNTS[0].id; }
+
+function sheetImport(preset){
+  if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
+  openSheet("Import a list",
+    '<div class="card" style="margin-top:var(--s-2)">' +
+      fieldSelect("fAcct", "Into account", acctOptions(), (preset && preset.acct) || defaultAcct()) + '</div>' +
+    '<div class="note" style="margin-top:var(--s-6)">One row per holding, commas or tabs:<br>' +
+    '<span style="font-family:var(--mono);font-size:var(--t-cap)">symbol, shares, price, cost per share, type</span><br>' +
+    'Type is optional — stock, intl, crypto, bond, reit or cash.</div>' +
+    '<textarea class="box" id="fPaste" style="margin-top:var(--s-5)" spellcheck="false" ' +
+    'placeholder="VTI, 182, 312.44, 214.80\nBTC, 1.42, 86420, 41250, crypto">' +
+    esc((preset && preset.text) || "") + '</textarea>' +
+    '<button class="btn" id="fSave">Review</button>',
+    function(){
+      el("fSave").addEventListener("click", function(){
+        var acct = el("fAcct").value, text = el("fPaste").value;
+        var out = parseRows(text);
+        sheetReview(out.rows, out.skipped, acct, function(){
+          sheetImport({acct:acct, text:text});
+        });
+      });
+    });
+}
+
+/* Reading a screenshot happens on the phone. The recogniser is fetched the
+   first time it is asked for and nothing but the text it finds leaves the
+   device - and what it finds lands in a box you can correct before review. */
+var OCR_SRC = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+/* the hash of that exact file - if the CDN ever serves anything else, the
+   browser refuses to run it. Changing the version means changing this too. */
+var OCR_SRI = "sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F";
+function loadOcr(done){
+  if (window.Tesseract) return done(null);
+  if (loadOcr._p){ loadOcr._p.push(done); return; }
+  loadOcr._p = [done];
+  var sc = document.createElement("script");
+  sc.integrity = OCR_SRI;
+  sc.crossOrigin = "anonymous";
+  sc.src = OCR_SRC;
+  sc.onload  = function(){ var q = loadOcr._p; loadOcr._p = null; q.forEach(function(f){ f(window.Tesseract ? null : new Error("x")); }); };
+  sc.onerror = function(){ var q = loadOcr._p; loadOcr._p = null; q.forEach(function(f){ f(new Error("x")); }); };
+  document.head.appendChild(sc);
+}
+
+function sheetScan(preset){
+  if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
+  var file = null, busy = false;
+  openSheet("Scan a statement",
+    '<div class="note" style="margin:var(--s-2) var(--s-1) 0">A screenshot of a holdings page reads best. ' +
+    'Check what comes back before anything is saved.</div>' +
+    '<div class="card" style="margin-top:var(--s-6)">' +
+      fieldSelect("fAcct", "Into account", acctOptions(), (preset && preset.acct) || defaultAcct()) + '</div>' +
+    '<input id="fPhoto" type="file" accept="image/*" style="display:none">' +
+    '<button class="btn ghost" id="fPick" style="margin-top:var(--s-6)">Choose a screenshot or photo</button>' +
+    '<div id="fShot"></div>' +
+    '<div class="note" id="fMsg"></div>' +
+    '<textarea class="box" id="fPaste" style="margin-top:var(--s-5)" spellcheck="false" ' +
+    'placeholder="Symbol, shares and price — one holding per line">' +
+    esc((preset && preset.text) || "") + '</textarea>' +
+    '<button class="btn" id="fGo">Review</button>',
+    function(){
+      el("fPick").addEventListener("click", function(){ el("fPhoto").click(); });
+      el("fPhoto").addEventListener("change", function(){
+        file = this.files && this.files[0];
+        if (!file) return;
+        el("fShot").innerHTML = '<img src="' + URL.createObjectURL(file) + '" alt="The page you chose" ' +
+          'style="width:100%;border-radius:var(--r-card);margin-top:var(--s-5);display:block">';
+        el("fPick").textContent = "Choose a different one";
+        read();
+      });
+
+      function read(){
+        if (busy || !file) return;
+        busy = true;
+        el("fMsg").textContent = "Reading it…";
+        loadOcr(function(err){
+          if (err){
+            busy = false;
+            el("fMsg").textContent = "Could not reach the reader. Type the holdings in below instead.";
+            return;
+          }
+          window.Tesseract.recognize(file, "eng", {
+            logger: function(m){
+              if (m.status === "recognizing text")
+                el("fMsg").textContent = "Reading it… " + Math.round(m.progress * 100) + "%";
+            }
+          }).then(function(res){
+            busy = false;
+            var text = ((res && res.data && res.data.text) || "").trim();
+            var out = parseRows(text);
+            if (!out.rows.length){
+              el("fMsg").textContent = "Nothing readable came back. Type the holdings in below.";
+              return;
+            }
+            el("fPaste").value = out.rows.map(function(r){
+              return [r.tick, r.shares, r.price].concat(r.hasCost ? [r.cost] : []).join(", ");
+            }).join("\n");
+            el("fMsg").textContent = out.rows.length + (out.rows.length === 1 ? " holding" : " holdings") +
+              " found. Fix anything that looks wrong, then review.";
+          }).catch(function(){
+            busy = false;
+            el("fMsg").textContent = "That image could not be read. Type the holdings in below instead.";
+          });
+        });
+      }
+
+      el("fGo").addEventListener("click", function(){
+        var acct = el("fAcct").value, text = el("fPaste").value;
+        var out = parseRows(text);
+        sheetReview(out.rows, out.skipped, acct, function(){
+          sheetScan({acct:acct, text:text});
+        });
+      });
+    });
+}
+
+function sheetAbout(){
+  openSheet("About",
+    '<div class="card" style="margin-top:var(--s-2)">'+
+    '<div class="row"><div class="row-main"><div class="row-t">What this is</div>'+
+    '<div class="row-s" style="white-space:normal">Every account you own, in one place.</div></div></div>'+
+    '<div class="row"><div class="row-main"><div class="row-t">Where the numbers come from</div>'+
+    '<div class="row-s" style="white-space:normal">An example portfolio. Price history is generated, anchored to each '+
+    'holding’s cost and current price. Market quotes are illustrative.</div></div></div>'+
+    '<div class="row"><div class="row-main"><div class="row-t">Your data</div>'+
+    '<div class="row-s" style="white-space:normal">Anything you add is kept in this browser on this device. '+
+    'Nothing is uploaded.</div></div></div>'+
+    '<div class="row"><div class="row-main"><div class="row-t">Sectors</div>'+
+    '<div class="row-s" style="white-space:normal">11 GICS sectors, looked through from each fund’s published weights.</div></div></div>'+
+    '</div>');
+}
+
+/* ========================= tabs + chrome ========================= */
+var ICONS = {
+  portfolio:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17.5l5.2-5.6 3.4 3.1L21 5.5"/><path d="M15.4 5.5H21v5.4"/><path d="M3 21h18"/></svg>',
+  breakdown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6V12l6.6 5.2"/></svg>',
+  markets:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V11"/><path d="M9.3 20V5"/><path d="M14.7 20v-6.6"/><path d="M20 20V8.4"/></svg>',
+  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M5 17h14"/><circle cx="9.4" cy="7" r="2.4"/><circle cx="14.6" cy="17" r="2.4"/></svg>'
+};
+var TABS = [["portfolio","Portfolio"],["breakdown","Breakdown"],["markets","Markets"],["settings","Settings"]];
+
+function renderTabs(){
+  el("tabbar").innerHTML = TABS.map(function(t){
+    return '<button class="tab'+(state.tab===t[0]?" on":"")+'" data-tab="'+t[0]+'" aria-label="'+t[1]+'">'+
+      ICONS[t[0]]+'<span>'+t[1]+'</span></button>';
+  }).join("");
+}
+/* where each tab was left, so coming back lands where you were */
+var tabScroll = {};
+function setTab(k){
+  /* tapping the tab you are already on is the iOS scroll-to-top gesture */
+  if (k === state.tab){
+    tabScroll[k] = 0;
+    window.scrollTo({top:0, behavior:"smooth"});
+    setTimeout(function(){ if (window.scrollY > 0) window.scrollTo(0,0); }, 400);
+    return;
+  }
+  tabScroll[state.tab] = window.scrollY;
+  state.tab = k;
+  TABS.forEach(function(t){ el("v-"+t[0]).classList.toggle("on", t[0]===k); });
+  renderTabs();
+  if (k==="portfolio") paintHero();
+  window.scrollTo(0, tabScroll[k] || 0);
+}
+function renderPeriods(){
+  el("periodSeg").innerHTML = PERIODS.map(function(p){
+    return '<button data-period="'+p.k+'"'+(state.period===p.k?' class="on"':'')+'>'+p.k+'</button>';
+  }).join("");
+}
+function applyTheme(){
+  if (state.theme === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", state.theme);
+}
+function renderAll(){
+  seriesCache = {};
+  renderChips(); renderPeriods(); renderPortfolio(); renderBreakdown(); renderMarkets(); renderSettings(); renderTabs();
+}
+
+/* ========================= events ========================= */
+document.addEventListener("click", function(e){
+  var t;
+  if ((t = e.target.closest("[data-tab]")))       { setTab(t.dataset.tab); return; }
+  if ((t = e.target.closest("[data-period]")))    { state.period = t.dataset.period; renderPeriods(); state.scrubIndex=null; paintHero(); return; }
+  if ((t = e.target.closest("[data-acct]")))      { state.acct = t.dataset.acct; renderChips(); renderPortfolio(); return; }
+  if ((t = e.target.closest("[data-bacct]")))     { state.bAcct = t.dataset.bacct; renderChips(); renderBreakdown(); return; }
+  if ((t = e.target.closest("[data-mkt]")))       { state.market = t.dataset.mkt; renderMarkets(); return; }
+  if ((t = e.target.closest("[data-theme]")))     { state.theme = t.dataset.theme; applyTheme(); save(); renderSettings(); return; }
+  if ((t = e.target.closest("[data-editacct]")))  { sheetAccount(t.dataset.editacct); return; }
+  if ((t = e.target.closest("[data-hold]")))      { sheetHoldDetail(+t.dataset.hold); return; }
+  if ((t = e.target.closest("[data-off]")))       { sheetOffDetail(+t.dataset.off); return; }
+  if ((t = e.target.closest("[data-reset]")))     {
+    confirmAction("Reset portfolio?",
+      "Every account and holding you have entered is removed and the example portfolio comes back. This cannot be undone.",
+      "Reset everything", function(){
+        try { localStorage.removeItem(KEY); } catch(err){}
+        ACCOUNTS = clone(SEED_ACCOUNTS); HOLDINGS = clone(SEED_HOLDINGS);
+        state.acct = "all"; state.bAcct = "all"; save(); renderAll();
+        toast("Reset to the example portfolio");
+      });
+    return;
+  }
+  if ((t = e.target.closest("[data-sheet]")))     {
+    var which = t.dataset.sheet;
+    if (which==="addMenu") sheetAddMenu();
+    else if (which==="account") sheetAccount();
+    else if (which==="holding") sheetHolding();
+    else if (which==="offAsset") sheetHolding("property");
+    else if (which==="import") sheetImport();
+    else if (which==="scan") sheetScan();
+    else if (which==="about") sheetAbout();
+    return;
+  }
+});
+/* If a sheet ever leaves without closeSheet - a back swipe, a tab switch, a
+   restore from the page cache - the body stays fixed and the scrim stays armed,
+   and every tap after that is swallowed. Check on touch and let it go. */
+function unstick(){
+  if (el("sheet").classList.contains("on")) return;
+  el("scrim").classList.remove("on");
+  el("sheet").style.transform = "";
+  el("app").removeAttribute("aria-hidden");
+  if (document.body.classList.contains("locked")){
+    document.body.classList.remove("locked");
+    document.body.style.top = "";
+    window.scrollTo(0, lockedY);
+  }
+}
+document.addEventListener("touchstart", unstick, {passive:true, capture:true});
+window.addEventListener("pageshow", unstick);
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) unstick(); });
+
+el("sheetClose").addEventListener("click", closeSheet);
+el("scrim").addEventListener("click", closeSheet);
+document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeSheet(); });
+
+/* sticky header shadow */
+window.addEventListener("scroll", function(){
+  var stuck = window.scrollY > 46;
+  [].forEach.call(document.querySelectorAll("[data-topbar]"), function(b){ b.classList.toggle("stuck", stuck); });
+}, {passive:true});
+
+/* ========================= pull to refresh ========================= */
+(function(){
+  var y0 = null, pulling = false, THRESH = 54;
+  function ptr(){ var v = el("v-"+state.tab); return v ? v.querySelector("[data-ptr]") : null; }
+  function label(el2, s){ var l = el2.querySelector("[data-ptr-label]"); if(l) l.textContent = s; }
+
+  document.addEventListener("touchstart", function(e){
+    if (window.scrollY > 0 || el("sheet").classList.contains("on")) { y0 = null; return; }
+    y0 = e.touches[0].clientY; pulling = false;
+  }, {passive:true});
+
+  document.addEventListener("touchmove", function(e){
+    if (y0 === null) return;
+    var p = ptr(); if (!p || p.classList.contains("busy")) return;
+    var dy = e.touches[0].clientY - y0;
+    if (dy <= 0 || window.scrollY > 0) { if(pulling){ p.style.height="0px"; pulling=false; } return; }
+    pulling = true;
+    var hgt = Math.min(dy * 0.5, 72);
+    p.style.transition = "none";
+    p.style.height = hgt + "px";
+    label(p, hgt >= THRESH ? "Release to refresh" : "Pull to refresh");
+  }, {passive:true});
+
+  document.addEventListener("touchend", function(){
+    if (y0 === null || !pulling) { y0 = null; return; }
+    var p = ptr(); y0 = null; pulling = false;
+    if (!p) return;
+    p.style.transition = "";
+    if (parseFloat(p.style.height) >= THRESH){
+      p.classList.add("busy"); p.style.height = "44px"; label(p, "Updating");
+      setTimeout(function(){
+        state.updated = new Date();
+        renderAll();
+        p.classList.remove("busy"); p.style.height = "0px"; label(p, "Pull to refresh");
+      }, 650);
+    } else {
+      p.style.height = "0px";
+    }
+  }, {passive:true});
+})();
+
+/* ========================= boot ========================= */
+load();
+applyTheme();
+renderAll();
+el("app").classList.add("ready");
+bindChart();
+setTab("portfolio");
+window.addEventListener("resize", function(){ if(state.tab==="portfolio") paintHero(); });
+
+if ("serviceWorker" in navigator) {
+  var registerWorker = function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  };
+  if (document.readyState === "complete") registerWorker();
+  else window.addEventListener("load", registerWorker);
+}
+})();
