@@ -187,9 +187,22 @@ function walk(seed,n,vol,from,to){
   return out;
 }
 
+/* toLocaleString with options builds a fresh Intl formatter on every call,
+   and a single render formats hundreds of figures. Build each one once. */
+var NF = {}, DF = {};
+function nf(min, max){
+  var k = min+"|"+max;
+  return NF[k] || (NF[k] = new Intl.NumberFormat("en-US",{minimumFractionDigits:min, maximumFractionDigits:max}));
+}
+function df(kind, opts){
+  var k = kind+JSON.stringify(opts);
+  return DF[k] || (DF[k] = new Intl.DateTimeFormat("en-US", opts));
+}
+var TIME = {hour:"numeric",minute:"2-digit"};
+function clock(d){ return df("t", TIME).format(d); }
 function usd(n,dp){
   var d = dp===undefined ? (Math.abs(n)>=1000?0:2) : dp;
-  return "$"+n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+  return "$"+nf(d,d).format(n);
 }
 function signed(n){ return (n>=0?"+":"−")+usd(Math.abs(n)); }
 function pct(n,dp){ return (n>=0?"+":"−")+Math.abs(n).toFixed(dp===undefined?2:dp)+"%"; }
@@ -395,13 +408,13 @@ function dateAt(ix, n){
   if (state.period==="1D"){
     var mins = 570 + Math.round(ix/(n-1)*390);
     var dt = new Date(TODAY.getTime()); dt.setHours(0, mins, 0, 0);
-    return dt.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+    return clock(dt);
   }
   var days = periodDef(state.period).n;
   var back = Math.round((1 - ix/(n-1)) * days);
   var d = new Date(TODAY.getTime() - back*86400e3);
-  return d.toLocaleDateString("en-US", days>300
-    ? {month:"short", year:"numeric"} : {month:"short", day:"numeric"});
+  return df("d", days>300
+    ? {month:"short", year:"numeric"} : {month:"short", day:"numeric"}).format(d);
 }
 
 function paintHero(){
@@ -554,7 +567,7 @@ function renderPortfolio(){
   var sorted = hs.slice().sort(function(a,b){ return val(b)-val(a); });
   el("holdingsList").innerHTML = sorted.length ? sorted.map(function(h,i){
     var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0;
-    var sub = (h.cls==="cash" ? acctById(h.acct).name : h.shares.toLocaleString("en-US",{maximumFractionDigits:4})+" × "+usd(h.price,2));
+    var sub = (h.cls==="cash" ? acctById(h.acct).name : nf(0,4).format(h.shares)+" × "+usd(h.price,2));
     return '<button class="row" data-hold="'+i+'"><span class="dot" style="background:'+acctColor(h.acct)+'"></span>'+
       '<div class="row-main"><div class="row-t">'+esc(h.cls==="cash"?h.name:h.tick)+
       (h.cls==="cash"?"":' <span class="dim" style="font-weight:400">'+esc(h.name)+'</span>')+'</div>'+
@@ -564,7 +577,7 @@ function renderPortfolio(){
   }).join("") : '<div class="empty">Nothing in this account yet.<br>Tap Add to put something in it.</div>';
   el("holdingsList").dataset.scope = state.acct;
 
-  el("updatedAt").textContent = "Updated " + state.updated.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+  el("updatedAt").textContent = "Updated " + clock(state.updated);
   state.scrubIndex = null;
   paintHero();
 }
@@ -754,7 +767,7 @@ function renderMarkets(){
   el("mktGrid").innerHTML = gridRows.map(function(r,i){
     var c = r.d>=0 ? "var(--pos)" : "var(--neg)";
     var v = r.pct ? r.v.toFixed(2)+"%"
-                  : r.v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+                  : nf(2,2).format(r.v);
     var d = r.pct ? (r.d>=0?"+":"−")+Math.abs(r.d).toFixed(2)+" pp" : pct(r.d);
     /* an odd count would otherwise leave the last card orphaned beside a gap */
     var wide = (i === gridRows.length-1 && gridRows.length % 2) ? " wide" : "";
@@ -776,7 +789,7 @@ function renderMarkets(){
   function mrow(x){
     var r = x.r;
     var d = r.pct ? (r.d>=0?"+":"−")+Math.abs(r.d).toFixed(2)+" pp" : pct(r.d);
-    var v = r.pct ? r.v.toFixed(2)+"%" : r.v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+    var v = r.pct ? r.v.toFixed(2)+"%" : nf(2,2).format(r.v);
     return '<div class="row"><div class="row-main"><div class="row-t">'+esc(r.n)+'</div>'+
       '<div class="row-s">'+esc(x.from)+'</div></div>'+
       '<div class="row-r"><div class="row-v num">'+v+'</div><div class="row-d num '+cls(r.d)+'">'+d+'</div></div></div>';
@@ -787,7 +800,7 @@ function renderMarkets(){
   var hour = state.updated.getHours();
   var open = hour>=9 && hour<16;
   el("mktSession").textContent = open ? "US market open" : "US market closed";
-  el("mktClock").textContent = state.updated.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+  el("mktClock").textContent = clock(state.updated);
 }
 
 /* ========================= settings tab ========================= */
@@ -1128,7 +1141,7 @@ function sheetHoldDetail(idx){
   openSheet(h.tick, '<div class="card" style="margin-top:var(--s-2)">'+
     line("Account", esc(acctById(h.acct).name))+
     line("Type", esc(CLASS_META[h.cls].label))+
-    (h.cls==="cash" ? "" : line("Shares", h.shares.toLocaleString("en-US",{maximumFractionDigits:6})))+
+    (h.cls==="cash" ? "" : line("Shares", nf(0,6).format(h.shares)))+
     (h.cls==="cash" ? "" : line("Price", usd(h.price,2)))+
     (h.cls==="cash" ? "" : line("Cost per share", usd(h.cost,2)))+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
@@ -1257,7 +1270,7 @@ function applyPlan(plan, acct){
   return {added:added, updated:updated};
 }
 
-function shrTxt(n){ return n.toLocaleString("en-US",{maximumFractionDigits:6}); }
+function shrTxt(n){ return nf(0,6).format(n); }
 function planLabel(p){
   var r = p.row, n = shrTxt(r.shares);
   if (p.kind === "new")    return "New · " + n + " shares at " + usd(r.price,2);
@@ -1619,8 +1632,15 @@ applyTheme();
 renderAll();
 el("app").classList.add("ready");
 bindChart();
-setTab("portfolio");
-window.addEventListener("resize", function(){ if(state.tab==="portfolio") paintHero(); });
+/* the portfolio tab is already the one showing and renderAll has painted it.
+   Calling setTab here would only scroll to the top, which forces a layout
+   before the first frame. */
+var resizeQueued = false;
+window.addEventListener("resize", function(){
+  if (resizeQueued) return;
+  resizeQueued = true;
+  requestAnimationFrame(function(){ resizeQueued = false; if(state.tab==="portfolio") paintHero(); });
+});
 
 if ("serviceWorker" in navigator) {
   var registerWorker = function(){
