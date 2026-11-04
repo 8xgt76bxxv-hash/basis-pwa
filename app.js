@@ -197,6 +197,8 @@ function cls(n){ return n>=0?"pos":"neg"; }
 function esc(s){ return String(s).replace(/[&<>"']/g,function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
 function el(id){ return document.getElementById(id); }
+/* a control that stays selected says so to a screen reader, not only in colour */
+function pressed(on){ return ' aria-pressed="'+(on?"true":"false")+'"'; }
 /* a sequential ramp inside one parent hue - strong enough to read as an order */
 function ramp(base,i,n){
   var t = n<2 ? 0 : i/(n-1);
@@ -499,15 +501,15 @@ function bindChart(){
 
 /* ========================= portfolio tab ========================= */
 function renderChips(){
-  var html = '<button class="chip'+(state.acct==="all"?" on":"")+'" data-acct="all">All accounts</button>';
+  var html = '<button class="chip'+(state.acct==="all"?" on":"")+'"'+pressed(state.acct==="all")+' data-acct="all">All accounts</button>';
   liveAccounts().forEach(function(a){
-    html += '<button class="chip'+(state.acct===a.id?" on":"")+'" data-acct="'+esc(a.id)+'">'+
+    html += '<button class="chip'+(state.acct===a.id?" on":"")+'"'+pressed(state.acct===a.id)+' data-acct="'+esc(a.id)+'">'+
       '<span class="dot" style="background:'+acctColor(a.id)+'"></span>'+esc(a.name)+'</button>';
   });
   el("acctChips").innerHTML = html;
-  var bhtml = '<button class="chip'+(state.bAcct==="all"?" on":"")+'" data-bacct="all">All accounts</button>';
+  var bhtml = '<button class="chip'+(state.bAcct==="all"?" on":"")+'"'+pressed(state.bAcct==="all")+' data-bacct="all">All accounts</button>';
   liveAccounts().forEach(function(a){
-    bhtml += '<button class="chip'+(state.bAcct===a.id?" on":"")+'" data-bacct="'+esc(a.id)+'">'+
+    bhtml += '<button class="chip'+(state.bAcct===a.id?" on":"")+'"'+pressed(state.bAcct===a.id)+' data-bacct="'+esc(a.id)+'">'+
       '<span class="dot" style="background:'+acctColor(a.id)+'"></span>'+esc(a.name)+'</button>';
   });
   el("bAcctChips").innerHTML = bhtml;
@@ -745,7 +747,7 @@ function sparkPath(seed, d){
 }
 function renderMarkets(){
   el("mktChips").innerHTML = MKT_ORDER.map(function(k){
-    return '<button class="chip'+(state.market===k?" on":"")+'" data-mkt="'+k+'">'+MARKETS[k].title+'</button>';
+    return '<button class="chip'+(state.market===k?" on":"")+'"'+pressed(state.market===k)+' data-mkt="'+k+'">'+MARKETS[k].title+'</button>';
   }).join("");
 
   /* the grid is the category you picked, biggest mover first */
@@ -804,7 +806,7 @@ function renderSettings(){
   }).join("") || '<div class="empty">No accounts yet.</div>';
 
   el("themeSeg").innerHTML = [["system","System"],["light","Light"],["dark","Dark"]].map(function(t){
-    return '<button data-theme="'+t[0]+'"'+(state.theme===t[0]?' class="on"':'')+'>'+t[1]+'</button>';
+    return '<button data-theme="'+t[0]+'"'+(state.theme===t[0]?' class="on"':'')+pressed(state.theme===t[0])+'>'+t[1]+'</button>';
   }).join("");
 
   var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -826,7 +828,19 @@ function renderSettings(){
 /* ========================= sheets ========================= */
 var sheetState = {};
 var lockedY = 0;
+var sheetOpener = null;
+/* while a sheet is up, the page behind it cannot be reached at all - not by
+   Tab, not by a screen reader's virtual cursor */
+function setBackground(off){
+  var app = el("app");
+  if (off){ app.setAttribute("inert",""); app.setAttribute("aria-hidden","true"); }
+  else { app.removeAttribute("inert"); app.removeAttribute("aria-hidden"); }
+}
 function openSheet(title, html, after){
+  if (!el("sheet").classList.contains("on")){
+    var a = document.activeElement;
+    sheetOpener = a && a !== document.body && !el("sheet").contains(a) ? a : null;
+  }
   el("sheetTitle").textContent = title;
   el("sheetBody").innerHTML = html;
   /* the page behind a sheet must not scroll, or the sheet is only a picture
@@ -836,7 +850,7 @@ function openSheet(title, html, after){
     document.body.style.top = (-lockedY)+"px";
     document.body.classList.add("locked");
   }
-  el("app").setAttribute("aria-hidden","true");
+  setBackground(true);
   el("scrim").classList.add("on");
   el("sheet").classList.add("on");
   el("sheet").style.transform = "";
@@ -852,11 +866,17 @@ function closeSheet(){
   el("sheet").classList.remove("on");
   el("sheet").classList.remove("drag");
   el("sheet").style.transform = "";
-  el("app").removeAttribute("aria-hidden");
+  setBackground(false);
   if (document.body.classList.contains("locked")){
     document.body.classList.remove("locked");
     document.body.style.top = "";
     window.scrollTo(0, lockedY);
+  }
+  /* hand focus back to whatever opened the sheet, if it is still on the page.
+     A button, never a text field, so iOS raises no keyboard. */
+  var back = sheetOpener; sheetOpener = null;
+  if (back && document.contains(back) && back.tagName === "BUTTON"){
+    try { back.focus({preventScroll:true}); } catch(err){}
   }
   setTimeout(function(){ if(!el("sheet").classList.contains("on")) el("sheetBody").innerHTML=""; }, 320);
 }
@@ -884,6 +904,10 @@ function closeSheet(){
   }
   grip.addEventListener("touchend", end);
   grip.addEventListener("touchcancel", end);
+  /* it is announced as a Close button, so it has to act like one */
+  grip.addEventListener("keydown", function(e){
+    if (e.key === "Enter" || e.key === " "){ e.preventDefault(); closeSheet(); }
+  });
 })();
 function toast(msg, undo){
   var t = el("toast");
@@ -936,7 +960,7 @@ function fieldSelect(id,label,opts,sel){
 }
 function swatchRow(sel){
   return '<div class="swatches" id="swatches">'+SWATCHES.map(function(s){
-    return '<button class="sw'+(s.k===sel?" on":"")+'" data-sw="'+s.k+'" style="background:'+s.v+'" aria-label="'+s.k+'"></button>';
+    return '<button class="sw'+(s.k===sel?" on":"")+'" data-sw="'+s.k+'" style="background:'+s.v+'" aria-label="'+s.k+'"'+pressed(s.k===sel)+'></button>';
   }).join("")+'</div>';
 }
 
@@ -972,7 +996,7 @@ function sheetAccount(editId){
     el("swatches").addEventListener("click", function(e){
       var b = e.target.closest("[data-sw]"); if(!b) return;
       sheetState.color = b.dataset.sw;
-      [].forEach.call(this.querySelectorAll(".sw"), function(x){ x.classList.toggle("on", x===b); });
+      [].forEach.call(this.querySelectorAll(".sw"), function(x){ x.classList.toggle("on", x===b); x.setAttribute("aria-pressed", String(x===b)); });
     });
     el("fSave").addEventListener("click", function(){
       var name = el("fName").value.trim();
@@ -1288,7 +1312,7 @@ function sheetReview(rows, skipped, acct, back){
   }
   function rowsHtml(){
     return plan.map(function(p, i){
-      return '<button class="row' + (p.on ? "" : " off") + '" data-rv="' + i + '">' +
+      return '<button class="row' + (p.on ? "" : " off") + '"' + pressed(p.on) + ' data-rv="' + i + '">' +
         '<div class="pick' + (p.on ? " on" : "") + '"></div>' +
         '<div class="row-main"><div class="row-t">' + esc(p.row.tick) + '</div>' +
         '<div class="row-s">' + esc(planLabel(p)) + '</div></div></button>';
@@ -1312,6 +1336,7 @@ function sheetReview(rows, skipped, acct, back){
         p.on = !p.on;
         t.classList.toggle("off", !p.on);
         t.querySelector(".pick").classList.toggle("on", p.on);
+        t.setAttribute("aria-pressed", String(p.on));
         el("rvGo").textContent = label();
       });
       el("rvGo").addEventListener("click", function(){
@@ -1474,8 +1499,8 @@ var TABS = [["portfolio","Portfolio"],["breakdown","Breakdown"],["markets","Mark
 
 function renderTabs(){
   el("tabbar").innerHTML = TABS.map(function(t){
-    return '<button class="tab'+(state.tab===t[0]?" on":"")+'" data-tab="'+t[0]+'" aria-label="'+t[1]+'">'+
-      ICONS[t[0]]+'<span>'+t[1]+'</span></button>';
+    return '<button class="tab'+(state.tab===t[0]?" on":"")+'" data-tab="'+t[0]+'"'+(state.tab===t[0]?' aria-current="page"':'')+'>'+
+      ICONS[t[0]].replace("<svg ",'<svg aria-hidden="true" focusable="false" ')+'<span>'+t[1]+'</span></button>';
   }).join("");
 }
 /* where each tab was left, so coming back lands where you were */
@@ -1497,7 +1522,7 @@ function setTab(k){
 }
 function renderPeriods(){
   el("periodSeg").innerHTML = PERIODS.map(function(p){
-    return '<button data-period="'+p.k+'"'+(state.period===p.k?' class="on"':'')+'>'+p.k+'</button>';
+    return '<button data-period="'+p.k+'"'+(state.period===p.k?' class="on"':'')+pressed(state.period===p.k)+'>'+p.k+'</button>';
   }).join("");
 }
 function applyTheme(){
@@ -1551,7 +1576,7 @@ function unstick(){
   if (el("sheet").classList.contains("on")) return;
   el("scrim").classList.remove("on");
   el("sheet").style.transform = "";
-  el("app").removeAttribute("aria-hidden");
+  setBackground(false);
   if (document.body.classList.contains("locked")){
     document.body.classList.remove("locked");
     document.body.style.top = "";
@@ -1564,7 +1589,18 @@ document.addEventListener("visibilitychange", function(){ if(!document.hidden) u
 
 el("sheetClose").addEventListener("click", closeSheet);
 el("scrim").addEventListener("click", closeSheet);
-document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeSheet(); });
+document.addEventListener("keydown", function(e){
+  if (e.key === "Escape") { closeSheet(); return; }
+  /* Tab cycles inside an open sheet instead of falling off its last control */
+  if (e.key !== "Tab" || !el("sheet").classList.contains("on")) return;
+  var f = [].filter.call(el("sheet").querySelectorAll(
+    'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'),
+    function(n){ return !n.disabled && n.offsetParent !== null; });
+  if (!f.length) return;
+  var first = f[0], last = f[f.length-1], a = document.activeElement;
+  if (e.shiftKey && (a === first || !el("sheet").contains(a))) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (a === last || !el("sheet").contains(a))) { e.preventDefault(); first.focus(); }
+});
 
 /* sticky header shadow */
 window.addEventListener("scroll", function(){
