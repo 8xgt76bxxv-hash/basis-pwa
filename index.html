@@ -514,6 +514,8 @@ textarea.box{
       <div class="card" id="dataCard"></div>
       <div class="card">
         <button class="row" data-sheet="about"><div class="row-main"><div class="row-t">About Basis</div></div><div class="chev"></div></button>
+        <button class="row" id="reloadApp"><div class="row-main"><div class="row-t" style="color:var(--accent)">Reload Basis</div>
+        <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
       <div class="foot">Everything you enter stays on this device.</div>
@@ -1320,16 +1322,17 @@ function keepEditing(){
     if (dy > 120 || flick) leaveSheet();
   }
 })();
-function toast(msg, undo){
+/* act is "Undo" unless named; a sticky toast waits for the tap */
+function toast(msg, undo, act, sticky){
   var t = el("toast");
   clearTimeout(toast._t);
   if (undo){
-    t.innerHTML = '<span>'+esc(msg)+'</span><button class="toast-u tap44" id="toastUndo">Undo</button>';
+    t.innerHTML = '<span>'+esc(msg)+'</span><button class="toast-u tap44" id="toastUndo">'+esc(act || "Undo")+'</button>';
     t.classList.add("act");
     el("toastUndo").addEventListener("click", function(){
       clearTimeout(toast._t); t.classList.remove("on","act"); undo();
     });
-    toast._t = setTimeout(function(){ t.classList.remove("on","act"); }, 6000);
+    if (!sticky) toast._t = setTimeout(function(){ t.classList.remove("on","act"); }, 6000);
   } else {
     t.textContent = msg; t.classList.remove("act");
     toast._t = setTimeout(function(){ t.classList.remove("on"); }, 2100);
@@ -2067,9 +2070,22 @@ bindChart();
 setTab("portfolio");
 window.addEventListener("resize", function(){ if(state.tab==="portfolio") paintHero(); });
 
+/* the worker fetches network-first, so a reload is always the newest page.
+   An installed app is resumed rather than relaunched, though, so look for a
+   new worker whenever Basis comes back to the front and offer the reload. */
+el("reloadApp").addEventListener("click", function(){ location.reload(); });
 if ("serviceWorker" in navigator) {
+  var hadWorker = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", function(){
+    if (hadWorker) toast("New version ready", function(){ location.reload(); }, "Reload", true);
+    hadWorker = true;
+  });
   var registerWorker = function(){
-    navigator.serviceWorker.register("sw.js").catch(function(){});
+    navigator.serviceWorker.register("sw.js").then(function(reg){
+      document.addEventListener("visibilitychange", function(){
+        if (document.visibilityState === "visible") reg.update().catch(function(){});
+      });
+    }).catch(function(){});
   };
   if (document.readyState === "complete") registerWorker();
   else window.addEventListener("load", registerWorker);
