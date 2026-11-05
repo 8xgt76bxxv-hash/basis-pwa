@@ -140,8 +140,9 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
   margin:calc(-1*var(--s-5)) calc(-1*var(--s-4)) calc(-1*var(--s-5)) auto;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:flex-end}
 .topbar-lead{font-size:var(--t-cap2);color:var(--label-2);white-space:nowrap;letter-spacing:.01em;font-variant-numeric:tabular-nums}
 .topbar-lead.trail{margin-left:auto}
-.large{font-size:var(--t-large);font-weight:700;letter-spacing:-.022em;line-height:1.1;padding-top:var(--s-6);padding-bottom:var(--s-1)}
-.sub{font-size:var(--t-foot);color:var(--label-2);padding-bottom:var(--s-6)}
+/* a large title stands alone, as iOS draws one: the selected chip already
+   says which account is showing, so a line repeating it only took room */
+.large{font-size:var(--t-large);font-weight:700;letter-spacing:-.022em;line-height:1.1;padding-top:var(--s-6);padding-bottom:var(--s-6)}
 
 /* pull to refresh */
 .ptr{height:0;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;transition:height .22s cubic-bezier(.3,.9,.3,1)}
@@ -352,7 +353,6 @@ textarea.box{
     <div class="ptr" data-ptr><div class="ptr-in"><div class="spin"></div><span data-ptr-label>Pull to refresh</span></div></div>
     <div class="pad">
       <div class="large">Portfolio</div>
-      <div class="sub" id="pSub">Across 5 accounts</div>
 
       <div class="chips bleed" id="acctChips"></div>
 
@@ -412,7 +412,6 @@ textarea.box{
       <div class="sect">Holdings</div>
       <div class="card" id="holdingsList"></div>
 
-      <div class="foot" id="exampleFoot">Example portfolio. Values are illustrative.</div>
     </div>
   </section>
 
@@ -424,7 +423,6 @@ textarea.box{
     <div class="ptr" data-ptr><div class="ptr-in"><div class="spin"></div><span data-ptr-label>Pull to refresh</span></div></div>
     <div class="pad">
       <div class="large">Breakdown</div>
-      <div class="sub" id="bSub">What you own, by weight</div>
 
       <div class="chips bleed" id="bAcctChips"></div>
 
@@ -478,7 +476,6 @@ textarea.box{
     </div>
     <div class="pad">
       <div class="large">Settings</div>
-      <div class="sub">Your accounts and data</div>
 
       <div class="sect">Accounts</div>
       <div class="card" id="acctManage"></div>
@@ -505,7 +502,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Everything you enter stays on this device.<br>Build 10</div>
+      <div class="foot">Everything you enter stays on this device.<br>Build 11</div>
     </div>
   </section>
 
@@ -999,10 +996,6 @@ function renderPortfolio(){
   el("incomeMonth").textContent = usd(income/12);
   el("incomeYield").textContent = invTotal ? (income/invTotal*100).toFixed(2)+"% on value" : "";
   el("incomeOnCost").textContent = invCost ? (income/invCost*100).toFixed(2)+"%" : "—";
-  var live = ACCOUNTS.length;
-  el("pSub").textContent = state.acct==="all"
-    ? "Across " + live + " account" + (live===1?"":"s")
-    : acctById(state.acct).name + (acctById(state.acct).firm ? " · "+acctById(state.acct).firm : "");
 
   /* today's movers, within scope, biggest absolute dollar move first */
   var movers = hs.filter(function(h){ return h.day; })
@@ -1090,7 +1083,6 @@ var SECTOR_TOP = 5, sectorsAll = false;
 function renderBreakdown(){
   var hs = invested(state.bAcct);
   var total = sum(hs, val) || 1;
-  el("bSub").textContent = (state.bAcct==="all" ? "What you own, by weight" : acctById(state.bAcct).name + " · " + usd(sum(hs,val)));
 
   /* asset class - biggest to smallest */
   var classes = buckets(hs, function(h){ var o={}; o[h.cls]=val(h); return o; });
@@ -1199,7 +1191,7 @@ function renderSettings(){
   }).join("") || '<div class="empty">No accounts yet.</div>';
 
   el("themeSeg").innerHTML = [["system","System"],["light","Light"],["dark","Dark"]].map(function(t){
-    return '<button data-theme="'+t[0]+'"'+(state.theme===t[0]?' class="on"':'')+'>'+t[1]+'</button>';
+    return '<button data-settheme="'+t[0]+'"'+(state.theme===t[0]?' class="on"':'')+'>'+t[1]+'</button>';
   }).join("");
 
   var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -1946,8 +1938,6 @@ function applyTheme(){
 function renderAll(){
   seriesCache = {};
   renderChips(); renderPeriods(); renderPortfolio(); renderBreakdown(); renderSettings(); renderTabs();
-  /* the note is about the seed data: once anything is edited, it no longer applies */
-  el("exampleFoot").hidden = JSON.stringify([ACCOUNTS, HOLDINGS]) !== JSON.stringify([SEED_ACCOUNTS, SEED_HOLDINGS]);
 }
 
 /* ========================= events ========================= */
@@ -1958,7 +1948,9 @@ document.addEventListener("click", function(e){
   if ((t = e.target.closest("[data-acct]")))      { state.acct = t.dataset.acct; renderChips(); renderPortfolio(); return; }
   if ((t = e.target.closest("[data-bacct]")))     { state.bAcct = t.dataset.bacct; renderChips(); renderBreakdown(); return; }
   if ((t = e.target.closest("[data-sectors]")))   { sectorsAll = !sectorsAll; renderBreakdown(); return; }
-  if ((t = e.target.closest("[data-theme]")))     { state.theme = t.dataset.theme; applyTheme(); save(); renderSettings(); return; }
+  /* data-settheme, never data-theme: <html> carries data-theme once a theme is
+     picked, and closest() would find it from every tap below this line */
+  if ((t = e.target.closest("[data-settheme]")))  { state.theme = t.dataset.settheme; applyTheme(); save(); renderSettings(); return; }
   if ((t = e.target.closest("[data-editacct]")))  { sheetAccount(t.dataset.editacct); return; }
   if ((t = e.target.closest("[data-hold]")))      { sheetHoldDetail(+t.dataset.hold); return; }
   if ((t = e.target.closest("[data-reset]")))     {
