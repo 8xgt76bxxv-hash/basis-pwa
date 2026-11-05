@@ -23,11 +23,11 @@ html,body{margin:0;padding:0}
   --sep:rgba(60,60,67,.13); --sep-strong:rgba(60,60,67,.22);
   --label:#000; --label-2:rgba(60,60,67,.78); --label-3:rgba(60,60,67,.56);
   --accent:#5856d6; --accent-fill:#5856d6; --pos:#1d7a34; --neg:#d70015;
-  --chrome:rgba(248,248,250,.80); --mixbase:#c9c9ce;
-  /* categorical palette - green and red are reserved for gain and loss */
-  --c-indigo:#1664d8; --c-cyan:#1f9ed4; --c-orange:#ef7c00; --c-purple:#a63fd9;
-  --c-brown:#9a7b53; --c-gray:#8a8a8f; --c-teal:#0f9aa8; --c-gold:#c79100;
-  --c-slate:#5d6b85; --c-rose:#c2457f;
+  --chrome:rgba(248,248,250,.80);
+  /* categorical palette - one hue per asset class, nothing else. Green and red
+     are reserved for gain and loss; --c-neutral fills every single-series bar. */
+  --c-blue:#0085fe; --c-teal:#00afc7; --c-orange:#ff8c00; --c-purple:#b052d0;
+  --c-rose:#ea008a; --c-gray:#6f6f6f; --c-neutral:#8e8e93;
 
   /* ---- type. Eight steps, each one a real iOS text style. Nothing else. ---- */
   --t-cap2:11px;    /* Caption 2 - tickers, tab labels, the updated stamp */
@@ -47,10 +47,9 @@ html,body{margin:0;padding:0}
   /* ---- radius. Five steps. ---- */
   --r-xs:4px; --r-sm:8px; --r-md:12px; --r-card:14px; --r-pill:999px;
 
-  /* ---- the text rail. Everything inside a card starts at --rail. A row led
-     by a colour dot starts at --rail-dot, and that is the only other value:
-     dot(12) + gap(8) + rail(16) = 36. Two rails, never three. ---- */
-  --rail:16px; --rail-dot:36px; --dot:12px;
+  /* ---- the text rail. Everything inside a card starts at --rail. The only
+     dot left is the asset-class legend, and it sits inside its own bar row. ---- */
+  --rail:16px; --dot:12px;
 
   --tabbar:52px;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
@@ -62,10 +61,9 @@ html,body{margin:0;padding:0}
     --sep:rgba(84,84,88,.42); --sep-strong:rgba(84,84,88,.65);
     --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55);
     --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
-    --chrome:rgba(24,24,26,.76); --mixbase:#4a4a4e;
-    --c-indigo:#5aa9ff; --c-cyan:#64d2ff; --c-orange:#ff9f0a; --c-purple:#da8fff;
-    --c-brown:#c3a07a; --c-gray:#a0a0a6; --c-teal:#40c8e0; --c-gold:#ffd60a;
-    --c-slate:#9aabc7; --c-rose:#ff6fae;
+    --chrome:rgba(24,24,26,.76);
+    --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
+    --c-rose:#e55d8c; --c-gray:#b0b0b0; --c-neutral:#8e8e93;
     color-scheme:dark;
   }
 }
@@ -74,10 +72,9 @@ html,body{margin:0;padding:0}
   --sep:rgba(84,84,88,.42); --sep-strong:rgba(84,84,88,.65);
   --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55);
   --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
-  --chrome:rgba(24,24,26,.76); --mixbase:#4a4a4e;
-  --c-indigo:#5aa9ff; --c-cyan:#64d2ff; --c-orange:#ff9f0a; --c-purple:#da8fff;
-  --c-brown:#c3a07a; --c-gray:#a0a0a6; --c-teal:#40c8e0; --c-gold:#ffd60a;
-  --c-slate:#9aabc7; --c-rose:#ff6fae;
+  --chrome:rgba(24,24,26,.76);
+  --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
+  --c-rose:#e55d8c; --c-gray:#b0b0b0; --c-neutral:#8e8e93;
   color-scheme:dark;
 }
 
@@ -154,7 +151,6 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 button.row:active{background:var(--surface-2)}
 
 .dot{width:var(--dot);height:var(--dot);border-radius:var(--r-xs);flex-shrink:0}
-.dot.ring{background:none !important;border:3px solid;border-radius:50%}
 .tick{font-family:var(--mono);font-size:var(--t-cap2);letter-spacing:0;color:var(--label-2)}
 
 /* ---------- hero + chart ---------- */
@@ -183,7 +179,6 @@ button.row:active{background:var(--surface-2)}
 .chip{flex:0 0 auto;position:relative;display:flex;align-items:center;gap:var(--s-3);padding:var(--s-3) var(--s-5);border-radius:var(--r-pill);background:var(--surface);font-size:var(--t-foot);font-weight:500;color:var(--label-2);white-space:nowrap;min-height:36px}
 .chip::before{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%)}
 .chip.on{background:var(--accent-fill);color:#fff}
-.chip.on .dot{box-shadow:0 0 0 1.5px rgba(255,255,255,.92)}
 
 /* bars */
 .bars{padding:var(--s-2) var(--rail)}
@@ -195,6 +190,11 @@ button.row:active{background:var(--surface-2)}
 .bar-v{font-size:var(--t-cap);color:var(--label-2);font-variant-numeric:tabular-nums}
 .track{height:var(--s-4);border-radius:var(--r-xs);background:var(--surface-3);overflow:hidden}
 .fill{height:100%;border-radius:var(--r-xs);transition:width .4s cubic-bezier(.25,.8,.3,1)}
+.bars-cap{font-size:var(--t-cap);color:var(--label-2);line-height:1.45;padding:var(--s-2) 0 var(--s-4)}
+.more{display:flex;align-items:center;width:100%;min-height:44px;padding:0 var(--rail);position:relative;
+  font-size:var(--t-sub);color:var(--accent);text-align:left}
+.more::before{content:"";position:absolute;left:var(--rail);right:0;top:0;height:.5px;background:var(--sep)}
+.more:active{background:var(--surface-2)}
 
 .hero-add{font-size:var(--t-cap);color:var(--label-2);margin-top:var(--s-2);font-variant-numeric:tabular-nums}
 .tkey{display:inline-block;width:var(--s-1);height:var(--s-5);border-radius:var(--r-pill);background:var(--accent);opacity:.55;margin-right:var(--s-4);vertical-align:-1px}
@@ -209,22 +209,8 @@ button.row:active{background:var(--surface-2)}
 .nw-v{font-size:var(--t-sub);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* stacked allocation bar */
-.stack{display:flex;height:var(--s-5);border-radius:var(--r-xs);overflow:hidden;margin:var(--s-5) var(--rail);gap:var(--s-1);background:var(--surface-3)}
+.stack{display:flex;height:var(--s-5);border-radius:var(--r-xs);overflow:hidden;margin:var(--s-5) var(--rail);gap:var(--s-1);background:var(--surface)}
 .stack span{height:100%}
-
-/* ---------- markets ---------- */
-.mgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s-5)}
-.mcard.wide{grid-column:1/-1}
-.mcard.wide .spark{height:48px}
-.mcard{background:var(--surface);border-radius:var(--r-card);padding:var(--rail);min-width:0;display:flex;flex-direction:column;gap:var(--s-4);text-align:left}
-.mcard-head{display:flex;flex-direction:column;gap:var(--s-2);min-width:0}
-.mcard-name{font-size:var(--t-sub);font-weight:600;letter-spacing:-.014em;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mcard-sub{font-size:var(--t-cap2);color:var(--label-2);font-family:var(--mono);letter-spacing:.02em;line-height:1}
-.mcard-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s-4)}
-.mcard-v{font-size:var(--t-body);font-weight:600;letter-spacing:-.018em;line-height:1.1}
-.mcard-d{font-size:var(--t-cap);font-weight:600;line-height:1.1;white-space:nowrap}
-.spark{height:var(--s-8);margin:calc(-1*var(--s-1)) 0 var(--s-1)}
-.spark svg{display:block;width:100%;height:100%}
 
 /* ---------- sheet ---------- */
 .scrim{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;transition:opacity .25s}
@@ -242,10 +228,28 @@ button.row:active{background:var(--surface-2)}
 .grip::after{content:"";position:absolute;left:-40px;right:-40px;top:calc(-1*var(--s-6));bottom:calc(-1*var(--s-6))}
 .sheet.drag{transition:none}
 body.locked{position:fixed;left:0;right:0;width:100%;overflow:hidden}
-.sheet-h{display:flex;align-items:center;justify-content:space-between;gap:var(--s-5);padding:var(--s-5) var(--rail) var(--s-4);flex-shrink:0}
-.sheet-t{font-size:var(--t-body);font-weight:600}
-.sheet-x{font-size:var(--t-sub);color:var(--accent);min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:flex-end}
+/* the title stays centred between whatever sits either side of it: a form's
+   Cancel on the left, its one action - or a plain sheet's Done - on the right */
+.sheet-h{display:grid;grid-template-columns:1fr minmax(0,max-content) 1fr;align-items:center;gap:var(--s-4);padding:var(--s-5) var(--rail) var(--s-4);flex-shrink:0}
+.sheet-t{grid-column:2;font-size:var(--t-body);font-weight:600;text-align:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet-x{grid-column:3;justify-self:end;font-size:var(--t-sub);color:var(--accent);min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:flex-end}
+.sheet-x.lead{grid-column:1;justify-self:start;justify-content:flex-start}
+.sheet-x.go{font-weight:600}
 .sheet-b{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 var(--rail) calc(env(safe-area-inset-bottom) + var(--s-7))}
+/* the discard prompt: an iOS action sheet over the sheet it guards. A tap
+   anywhere but Discard keeps the edits. */
+.ask{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;justify-content:flex-end;
+  padding:0 var(--s-4) calc(env(safe-area-inset-bottom) + var(--s-4));background:rgba(0,0,0,.2);
+  opacity:0;visibility:hidden;transition:opacity .2s,visibility 0s .2s}
+.ask.on{opacity:1;visibility:visible;transition:opacity .2s}
+.ask-g{width:100%;max-width:504px;margin:0 auto;background:var(--surface-2);border-radius:var(--r-card);overflow:hidden;
+  transform:translateY(var(--s-8));transition:transform .28s cubic-bezier(.32,.72,0,1)}
+.ask.on .ask-g{transform:none}
+.ask-g+.ask-g{margin-top:var(--s-4)}
+.ask-g button{width:100%;min-height:56px;font-size:var(--t-body);display:flex;align-items:center;justify-content:center}
+.ask-g button:active{background:var(--surface-3)}
+.ask-yes{color:var(--neg)}
+.ask-no{color:var(--accent);font-weight:600}
 
 /* ---------- forms ---------- */
 .field{display:flex;align-items:stretch;gap:var(--s-5);padding:0 var(--rail);min-height:48px;position:relative;background:var(--surface)}
@@ -261,10 +265,6 @@ textarea.box{
   width:100%;min-height:136px;background:var(--surface);border:0;border-radius:var(--r-md);
   padding:var(--s-5);font-family:var(--mono);font-size:var(--t-body);line-height:1.5;outline:none;resize:vertical;
 }
-.swatches{display:flex;gap:var(--s-4);flex-wrap:wrap;padding:var(--s-5) var(--rail);background:var(--surface)}
-.sw{width:32px;height:32px;border-radius:50%;position:relative}
-.sw::before{content:"";position:absolute;inset:-6px}
-.sw.on::after{content:"";position:absolute;inset:calc(-1*var(--s-2));border-radius:50%;border:2px solid var(--label)}
 .btn{
   width:100%;min-height:48px;border-radius:var(--r-md);background:var(--accent-fill);color:#fff;
   font-size:var(--t-body);font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:var(--s-6);
@@ -279,7 +279,10 @@ textarea.box{
 .pick.on::after{content:"";position:absolute;left:6px;top:3px;width:6px;height:11px;
   border-right:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(40deg)}
 .row.off .row-t,.row.off .row-s{opacity:.45}
-.err{font-size:var(--t-cap);color:var(--neg);margin:var(--s-4) var(--s-1) 0;min-height:var(--s-6)}
+/* why a form's action did not go ahead. It comes first in the form, which
+   scrolls back up to it: Save can be tapped a long way further down. */
+.err{font-size:var(--t-foot);color:var(--neg);line-height:1.4;margin:var(--s-2) var(--s-1) var(--s-5)}
+.err:empty{margin:0}
 
 /* ---------- tab bar ---------- */
 .tabbar{
@@ -287,7 +290,7 @@ textarea.box{
   background:var(--chrome);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
   border-top:.5px solid var(--sep);
   padding-bottom:env(safe-area-inset-bottom);
-  display:grid;grid-template-columns:repeat(4,1fr);
+  display:grid;grid-template-columns:repeat(3,1fr);
 }
 .tab{height:var(--tabbar);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-1);color:var(--label-2)}
 .tab.on{color:var(--accent)}
@@ -427,6 +430,7 @@ textarea.box{
         <div class="card">
           <div class="card-h"><div class="card-t">What’s inside your funds</div><div class="card-s" id="sectorNote"></div></div>
           <div class="bars" id="sectorBars"></div>
+          <div id="sectorMore"></div>
         </div>
       </section>
 
@@ -454,34 +458,6 @@ textarea.box{
     </div>
   </section>
 
-  <!-- ============ MARKETS ============ -->
-  <section class="scroll" id="v-markets">
-    <div class="topbar" data-topbar>
-      <div class="topbar-in pad"><div class="topbar-title">Markets</div><div class="topbar-lead trail" id="mktClock"></div></div>
-    </div>
-    <div class="ptr" data-ptr><div class="ptr-in"><div class="spin"></div><span data-ptr-label>Pull to refresh</span></div></div>
-    <div class="pad">
-      <div class="large">Markets</div>
-      <div class="sub" id="mktSession"></div>
-
-      <div class="chips bleed" id="mktChips"></div>
-
-      <div class="mgrid" id="mktGrid" style="margin-top:var(--s-5)"></div>
-
-      <div class="sect">Biggest moves today</div>
-      <div class="card">
-        <div class="card-h"><div class="card-t">Leading</div><div class="card-s">Across every market</div></div>
-        <div id="mktUp"></div>
-      </div>
-      <div class="card">
-        <div class="card-h"><div class="card-t">Lagging</div><div class="card-s">Across every market</div></div>
-        <div id="mktDown"></div>
-      </div>
-
-      <div class="foot">Example prices, for showing how this looks.</div>
-    </div>
-  </section>
-
   <!-- ============ SETTINGS ============ -->
   <section class="scroll" id="v-settings">
     <div class="topbar" data-topbar>
@@ -489,23 +465,13 @@ textarea.box{
     </div>
     <div class="pad">
       <div class="large">Settings</div>
-      <div class="sub">Your accounts, holdings and data</div>
+      <div class="sub">Your accounts and data</div>
 
       <div class="sect">Accounts</div>
       <div class="card" id="acctManage"></div>
       <div class="card">
         <button class="row" data-sheet="account"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add an account</div>
         <div class="row-s">A brokerage, an IRA, a wallet, a savings account</div></div><div class="chev"></div></button>
-      </div>
-
-      <div class="sect">Holdings</div>
-      <div class="card">
-        <button class="row" data-sheet="holding"><div class="row-main"><div class="row-t">Add a holding</div>
-        <div class="row-s">Enter a symbol, shares and cost</div></div><div class="chev"></div></button>
-        <button class="row" data-sheet="import"><div class="row-main"><div class="row-t">Import a list</div>
-        <div class="row-s">Paste rows from a spreadsheet or export</div></div><div class="chev"></div></button>
-        <button class="row" data-sheet="scan"><div class="row-main"><div class="row-t">Scan a statement</div>
-        <div class="row-s">Photograph a holdings page</div></div><div class="chev"></div></button>
       </div>
 
       <div class="sect">Appearance</div>
@@ -536,26 +502,17 @@ textarea.box{
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <div class="grip" role="button" tabindex="0" aria-label="Close"></div>
-  <div class="sheet-h"><div class="sheet-t" id="sheetTitle"></div><button class="sheet-x" id="sheetClose">Done</button></div>
+  <div class="sheet-h"><button class="sheet-x lead" id="sheetCancel" hidden>Cancel</button><div class="sheet-t" id="sheetTitle"></div><button class="sheet-x" id="sheetClose">Done</button></div>
   <div class="sheet-b" id="sheetBody"></div>
+</div>
+<div class="ask" id="ask" role="alertdialog" aria-modal="true" aria-label="Discard changes?">
+  <div class="ask-g"><button class="ask-yes" id="askYes">Discard changes</button></div>
+  <div class="ask-g"><button class="ask-no" id="askNo">Keep editing</button></div>
 </div>
 
 <script>
 (function(){
 "use strict";
-
-/* ========================= palette ========================= */
-/* Every top-level category gets its own hue. Green and red are reserved
-   for gain and loss, so they never appear as a category colour. */
-var SWATCHES = [
-  {k:"indigo", v:"var(--c-indigo)"}, {k:"cyan",  v:"var(--c-cyan)"},
-  {k:"orange", v:"var(--c-orange)"}, {k:"purple",v:"var(--c-purple)"},
-  {k:"teal",   v:"var(--c-teal)"},   {k:"brown", v:"var(--c-brown)"},
-  {k:"gold",   v:"var(--c-gold)"},   {k:"slate", v:"var(--c-slate)"},
-  {k:"rose",   v:"var(--c-rose)"},   {k:"gray",  v:"var(--c-gray)"}
-];
-var SWATCH = {};
-SWATCHES.forEach(function(s){ SWATCH[s.k] = s.v; });
 
 /* ========================= reference data ========================= */
 var SECTORS = ["Information Technology","Financials","Health Care","Consumer Discretionary",
@@ -578,25 +535,28 @@ var MIX = {
 };
 function one(s){ var o={}; o[s]=1; return o; }
 
+/* Colour means asset class and nothing else - accounts, sectors and regions
+   get none. Green and red are reserved for gain and loss. */
 var CLASS_META = {
-  us_stock:   {label:"US stocks",            color:"var(--c-indigo)"},
-  intl_stock: {label:"International stocks", color:"var(--c-cyan)"},
+  us_stock:   {label:"US stocks",            color:"var(--c-blue)"},
+  intl_stock: {label:"International stocks", color:"var(--c-teal)"},
   crypto:     {label:"Crypto",               color:"var(--c-orange)"},
-  bond:       {label:"Bonds",                color:"var(--c-brown)"},
-  real_estate:{label:"Real estate",          color:"var(--c-purple)"},
+  bond:       {label:"Bonds",                color:"var(--c-purple)"},
+  real_estate:{label:"Real estate",          color:"var(--c-rose)"},
   cash:       {label:"Cash",                 color:"var(--c-gray)"},
-  /* things you own that no market prices - they sit outside the portfolio total */
-  property:   {label:"Property",             color:"var(--c-teal)"},
-  vehicle:    {label:"Vehicle",              color:"var(--c-slate)"},
-  collectible:{label:"Collectible",          color:"var(--c-rose)"},
-  other:      {label:"Other asset",          color:"var(--c-gold)"},
+  /* things you own that no market prices - they sit outside the portfolio total,
+     are never charted, and so carry no colour of their own */
+  property:   {label:"Property",             color:"var(--c-gray)"},
+  vehicle:    {label:"Vehicle",              color:"var(--c-gray)"},
+  collectible:{label:"Collectible",          color:"var(--c-gray)"},
+  other:      {label:"Other asset",          color:"var(--c-gray)"},
   loan:       {label:"Loan",                 color:"var(--c-gray)"}
 };
 var OFF = {property:1, vehicle:1, collectible:1, other:1, loan:1};
 var REGION_META = {
-  us:        {label:"United States",   color:"var(--c-indigo)"},
-  developed: {label:"Developed ex-US", color:"var(--c-cyan)"},
-  emerging:  {label:"Emerging markets",color:"var(--c-purple)"}
+  us:        {label:"United States"},
+  developed: {label:"Developed ex-US"},
+  emerging:  {label:"Emerging markets"}
 };
 var VOL = {us_stock:.0104, intl_stock:.0092, crypto:.0345, bond:.0032, real_estate:.0118, cash:0};
 
@@ -651,58 +611,6 @@ var SEED_HOLDINGS = [
   h("other","MTG","Mortgage",                           "loan",         1,-142000,-142000, 0, 0, {held:2400})
 ];
 
-/* ========================= markets ========================= */
-var MARKETS = {
-  indices: {title:"Indices", rows:[
-    {n:"S&P 500",     s:"SPX",  v:7215.40, d: 0.38},
-    {n:"Nasdaq 100",  s:"NDX",  v:26418.92,d: 0.61},
-    {n:"Dow Jones",   s:"DJI",  v:48207.15,d: 0.12},
-    {n:"Russell 2000",s:"RUT",  v:2614.08, d:-0.22},
-    {n:"FTSE 100",    s:"UKX",  v:9842.60, d: 0.44},
-    {n:"Nikkei 225",  s:"NKY",  v:48910.25,d:-0.18},
-    {n:"DAX",         s:"DAX",  v:24781.33,d: 0.29},
-    {n:"Euro Stoxx 50",s:"SX5E",v:5742.18, d: 0.21}
-  ]},
-  sectors: {title:"Sectors", rows:[
-    {n:"Information Technology",s:"XLK",v:286.40,d: 0.94},
-    {n:"Financials",           s:"XLF",v: 56.82,d: 0.31},
-    {n:"Health Care",          s:"XLV",v:152.80,d:-0.22},
-    {n:"Consumer Discretionary",s:"XLY",v:231.47,d: 0.46},
-    {n:"Communication Services",s:"XLC",v:118.95,d: 0.72},
-    {n:"Industrials",          s:"XLI",v:148.20,d: 0.08},
-    {n:"Consumer Staples",     s:"XLP",v: 81.36,d:-0.41},
-    {n:"Energy",               s:"XLE",v: 94.70,d:-0.86},
-    {n:"Utilities",            s:"XLU",v: 86.14,d:-0.12},
-    {n:"Real Estate",          s:"XLRE",v:44.28,d: 0.18},
-    {n:"Materials",            s:"XLB",v: 92.55,d:-0.34}
-  ]},
-  commodities: {title:"Commodities", rows:[
-    {n:"Gold",        s:"XAU", v:4182.50,d: 0.67},
-    {n:"Silver",      s:"XAG", v:  58.94,d: 1.22},
-    {n:"Platinum",    s:"XPT", v:1486.20,d:-0.35},
-    {n:"Copper",      s:"HG",  v:   5.42,d: 0.48},
-    {n:"Crude oil",   s:"WTI", v:  63.18,d:-1.04},
-    {n:"Natural gas", s:"NG",  v:   4.26,d: 2.18}
-  ]},
-  crypto: {title:"Crypto", rows:[
-    {n:"Bitcoin",  s:"BTC", v:86420.00,d: 1.12},
-    {n:"Ethereum", s:"ETH", v: 3180.00,d: 2.04},
-    {n:"Solana",   s:"SOL", v:  184.60,d: 3.21},
-    {n:"Chainlink",s:"LINK",v:   22.85,d:-1.48},
-    {n:"Uniswap",  s:"UNI", v:   14.60,d:-1.24},
-    {n:"USD Coin", s:"USDC",v:    1.00,d: 0.00}
-  ]},
-  rates: {title:"Rates", rows:[
-    {n:"2-year Treasury", s:"US2Y", v:3.42,d:-0.04,pct:true},
-    {n:"10-year Treasury",s:"US10Y",v:4.08,d: 0.03,pct:true},
-    {n:"30-year Treasury",s:"US30Y",v:4.61,d: 0.05,pct:true},
-    {n:"Fed funds",       s:"FF",   v:3.75,d: 0.00,pct:true},
-    {n:"30-year mortgage",s:"MTG30",v:6.12,d:-0.02,pct:true},
-    {n:"High-yield savings",s:"HYSA",v:4.30,d:0.00,pct:true}
-  ]}
-};
-var MKT_ORDER = ["indices","sectors","commodities","crypto","rates"];
-
 /* ========================= helpers ========================= */
 var TODAY = new Date(2026, 9, 27);
 var N_DAYS = 1826, N_INTRA = 79;
@@ -734,22 +642,21 @@ function usd(n,dp){
   var d = dp===undefined ? (Math.abs(n)>=1000?0:2) : dp;
   return "$"+n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
 }
-function signed(n){ return (n>=0?"+":"−")+usd(Math.abs(n)); }
-function pct(n,dp){ return (n>=0?"+":"−")+Math.abs(n).toFixed(dp===undefined?2:dp)+"%"; }
-function cls(n){ return n>=0?"pos":"neg"; }
+/* A movement is judged by what is printed, not by the raw number: a figure
+   that rounds to nothing ($0.00, 0.0%) gets no sign, no arrow and no colour. */
+function moved(s){ return /[1-9]/.test(s); }
+function signed(n){ var s = usd(Math.abs(n)); return moved(s) ? (n>=0?"+":"−")+s : s; }
+function pct(n,dp){ var s = Math.abs(n).toFixed(dp===undefined?2:dp)+"%"; return moved(s) ? (n>=0?"+":"−")+s : s; }
+/* the colour class for a figure already run through signed() or pct() */
+function tone(s){ var c = s.charAt(0); return c==="+" ? "pos" : c==="−" ? "neg" : "dim"; }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
 function el(id){ return document.getElementById(id); }
-/* a sequential ramp inside one parent hue - strong enough to read as an order */
-function ramp(base,i,n){
-  var t = n<2 ? 0 : i/(n-1);
-  return "color-mix(in oklab, "+base+" "+Math.round(100 - t*74)+"%, var(--mixbase))";
-}
 
 /* ========================= state ========================= */
 var KEY = "basis.v2";
 var state = {
-  tab:"portfolio", period:"1M", acct:"all", bAcct:"all", market:"indices",
+  tab:"portfolio", period:"1M", acct:"all", bAcct:"all",
   theme:"system", scrubIndex:null, updated:new Date(TODAY.getTime()+9*3600e3+41*60e3)
 };
 var ACCOUNTS, HOLDINGS;
@@ -772,7 +679,6 @@ function save(){
 }
 function acctById(id){ for(var i=0;i<ACCOUNTS.length;i++) if(ACCOUNTS[i].id===id) return ACCOUNTS[i];
   return {id:id,name:"Account",firm:"",color:"gray"}; }
-function acctColor(id){ return SWATCH[acctById(id).color] || "var(--c-gray)"; }
 
 /* ========================= derived ========================= */
 function inScope(h, scope){ return scope==="all" || h.acct===scope; }
@@ -922,8 +828,11 @@ function paintHero(){
   var base = first + weighted, dp = base ? mkt/base*100 : 0;
 
   el("heroValue").textContent = usd(here, 2);
-  el("heroDelta").innerHTML = '<span class="'+cls(mkt)+'"><span class="arrow">'+(mkt>=0?"▲":"▼")+
-    '</span> '+signed(mkt)+' ('+pct(dp)+')</span>';
+  var mAbs = signed(mkt), mPct = pct(dp);
+  var mTone = tone(mAbs) !== "dim" ? tone(mAbs) : tone(mPct);
+  el("heroDelta").innerHTML = '<span class="'+mTone+'">'+
+    (mTone==="dim" ? "" : '<span class="arrow">'+(mTone==="pos"?"▲":"▼")+'</span> ')+
+    mAbs+' ('+mPct+')</span>';
   var addLine = el("heroAdd");
   if (added > 1){
     addLine.hidden = false;
@@ -1001,14 +910,12 @@ function bindChart(){
 function renderChips(){
   var html = '<button class="chip'+(state.acct==="all"?" on":"")+'" data-acct="all">All accounts</button>';
   liveAccounts().forEach(function(a){
-    html += '<button class="chip'+(state.acct===a.id?" on":"")+'" data-acct="'+a.id+'">'+
-      '<span class="dot" style="background:'+acctColor(a.id)+'"></span>'+esc(a.name)+'</button>';
+    html += '<button class="chip'+(state.acct===a.id?" on":"")+'" data-acct="'+a.id+'">'+esc(a.name)+'</button>';
   });
   el("acctChips").innerHTML = html;
   var bhtml = '<button class="chip'+(state.bAcct==="all"?" on":"")+'" data-bacct="all">All accounts</button>';
   liveAccounts().forEach(function(a){
-    bhtml += '<button class="chip'+(state.bAcct===a.id?" on":"")+'" data-bacct="'+a.id+'">'+
-      '<span class="dot" style="background:'+acctColor(a.id)+'"></span>'+esc(a.name)+'</button>';
+    bhtml += '<button class="chip'+(state.bAcct===a.id?" on":"")+'" data-bacct="'+a.id+'">'+esc(a.name)+'</button>';
   });
   el("bAcctChips").innerHTML = bhtml;
 }
@@ -1021,12 +928,14 @@ function renderPortfolio(){
   var gain = total - cost, gpct = cost ? gain/cost*100 : 0;
   var income = sum(hs, function(h){ return val(h)*(h.yield||0)/100; });
 
-  el("todayAbs").innerHTML = '<span class="'+cls(dayAbs)+'">'+signed(dayAbs)+'</span>';
-  el("todayPct").innerHTML = '<span class="'+cls(dayPct)+'">'+pct(dayPct)+'</span>';
+  var tAbs = signed(dayAbs), tPct = pct(dayPct);
+  el("todayAbs").innerHTML = '<span class="'+tone(tAbs)+'">'+tAbs+'</span>';
+  el("todayPct").innerHTML = '<span class="'+tone(tPct)+'">'+tPct+'</span>';
   el("totalValue").textContent = usd(total);
   el("totalCost").textContent = usd(cost);
-  el("totalGain").innerHTML = '<span class="'+cls(gain)+'">'+signed(gain)+'</span>';
-  el("returnPct").innerHTML = '<span class="'+cls(gpct)+'">'+pct(gpct)+'</span>';
+  var gAbs = signed(gain), gPct = pct(gpct);
+  el("totalGain").innerHTML = '<span class="'+tone(gAbs)+'">'+gAbs+'</span>';
+  el("returnPct").innerHTML = '<span class="'+tone(gPct)+'">'+gPct+'</span>';
   el("incomeYear").textContent = usd(income);
   el("incomeMonth").textContent = usd(income/12);
   el("incomeYield").textContent = total ? (income/total*100).toFixed(2)+"% on value" : "";
@@ -1043,24 +952,31 @@ function renderPortfolio(){
     .sort(function(a,b){ return Math.abs(b.amt)-Math.abs(a.amt); }).slice(0,3);
   todayMoverCount = movers.length;
   el("todayMovers").innerHTML = movers.map(function(m){
-    return '<div class="row"><span class="dot" style="background:'+acctColor(m.h.acct)+'"></span>'+
-      '<div class="row-main"><div class="row-t">'+esc(m.h.tick)+' <span class="dim" style="font-weight:400">'+esc(m.h.name)+'</span></div></div>'+
-      '<div class="row-r"><div class="row-v '+cls(m.amt)+'">'+signed(m.amt)+'</div>'+
-      '<div class="row-d '+cls(m.h.day)+'">'+pct(m.h.day)+'</div></div></div>';
+    var a = signed(m.amt), p = pct(m.h.day);
+    /* the same fund can sit in two accounts - when both moved, say which */
+    var twice = movers.filter(function(o){ return o.h.tick===m.h.tick; }).length > 1;
+    return '<div class="row">'+
+      '<div class="row-main"><div class="row-t">'+esc(m.h.tick)+' <span class="dim" style="font-weight:400">'+
+      esc(twice ? acctById(m.h.acct).name : m.h.name)+'</span></div></div>'+
+      '<div class="row-r"><div class="row-v '+tone(a)+'">'+a+'</div>'+
+      '<div class="row-d '+tone(p)+'">'+p+'</div></div></div>';
   }).join("");
   syncTodayCard();
 
   /* holdings, biggest first */
   var sorted = hs.slice().sort(function(a,b){ return val(b)-val(a); });
   el("holdingsList").innerHTML = sorted.length ? sorted.map(function(h,i){
-    var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0;
-    var sub = (h.cls==="cash" ? acctById(h.acct).name : h.shares.toLocaleString("en-US",{maximumFractionDigits:4})+" × "+usd(h.price,2));
-    return '<button class="row" data-hold="'+i+'"><span class="dot" style="background:'+acctColor(h.acct)+'"></span>'+
+    var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0, gTxt = pct(gp,1);
+    /* the same fund can sit in two accounts - across all of them, say which */
+    var qty = h.shares.toLocaleString("en-US",{maximumFractionDigits:4})+" × "+usd(h.price,2);
+    var sub = h.cls==="cash" ? acctById(h.acct).name
+            : state.acct==="all" ? acctById(h.acct).name+" · "+qty : qty;
+    return '<button class="row" data-hold="'+i+'">'+
       '<div class="row-main"><div class="row-t">'+esc(h.cls==="cash"?h.name:h.tick)+
       (h.cls==="cash"?"":' <span class="dim" style="font-weight:400">'+esc(h.name)+'</span>')+'</div>'+
       '<div class="row-s">'+esc(sub)+'</div></div>'+
       '<div class="row-r"><div class="row-v num">'+usd(val(h))+'</div>'+
-      '<div class="row-d num '+cls(gp)+'">'+pct(gp,1)+'</div></div><div class="chev"></div></button>';
+      '<div class="row-d num '+tone(gTxt)+'">'+gTxt+'</div></div><div class="chev"></div></button>';
   }).join("") : '<div class="empty">Nothing in this account yet.<br>Tap Add to put something in it.</div>';
   el("holdingsList").dataset.scope = state.acct;
 
@@ -1076,13 +992,11 @@ function renderNetWorth(){
   if (!off.length){ card.hidden = true; return; }
   card.hidden = false;
   var invested = sum(scoped("all"), val);
-  var rows = [{name:"Investments", sub:liveAccounts().length+" accounts", v:invested,
-               color:"var(--accent)", idx:-1}];
+  var rows = [{name:"Investments", sub:liveAccounts().length+" accounts", v:invested, idx:-1}];
   off.map(function(h,i){ return {h:h, i:i}; })
      .sort(function(a,b){ return val(b.h)-val(a.h); })
      .forEach(function(o){
-       rows.push({name:o.h.name, sub:CLASS_META[o.h.cls].label, v:val(o.h),
-                  color:CLASS_META[o.h.cls].color, idx:o.i});
+       rows.push({name:o.h.name, sub:CLASS_META[o.h.cls].label, v:val(o.h), idx:o.i});
      });
   var worth = 0;
   rows.forEach(function(r){ worth += r.v; });
@@ -1091,7 +1005,6 @@ function renderNetWorth(){
     var money = r.v < 0 ? "−"+usd(-r.v) : usd(r.v);
     var tag = r.idx < 0 ? "div" : "button";
     return '<'+tag+' class="nw-r"'+(r.idx<0?"":' data-off="'+r.idx+'"')+'>'+
-      '<span class="dot" style="background:'+r.color+'"></span>'+
       '<div class="nw-m"><div class="nw-n">'+esc(r.name)+'</div>'+
       '<div class="nw-s">'+esc(r.sub)+'</div></div>'+
       '<div class="nw-v num">'+money+'</div></'+tag+'>';
@@ -1099,16 +1012,15 @@ function renderNetWorth(){
 }
 
 /* ========================= breakdown tab ========================= */
-function barRow(name, value, share, color, ring){
-  /* an account and an asset class can hold the same money on one screen -
-     the shape says which card you are reading, whatever the hue is */
-  var sw = ring ? '<span class="dot ring" style="border-color:'+color+'"></span>'
-                : '<span class="dot" style="background:'+color+'"></span>';
+function barRow(name, value, share, color){
+  /* only the asset-class card passes a colour: there the dot is the legend for
+     its stacked bar. Every other card is one series in one neutral fill. */
+  var sw = color ? '<span class="dot" style="background:'+color+'"></span>' : "";
   return '<div class="bar"><div class="bar-h">'+sw+
     '<span class="bar-n">'+esc(name)+'</span>'+
     '<span class="bar-v num">'+usd(value)+'</span>'+
     '<span class="bar-p num">'+(share*100).toFixed(1)+'%</span></div>'+
-    '<div class="track"><div class="fill" style="width:'+Math.max(share*100,1.2).toFixed(2)+'%;background:'+color+'"></div></div></div>';
+    '<div class="track"><div class="fill" style="width:'+Math.max(share*100,1.2).toFixed(2)+'%;background:'+(color || "var(--c-neutral)")+'"></div></div></div>';
 }
 function buckets(hs, keyFn, metaFn){
   var map = {};
@@ -1135,6 +1047,8 @@ function allOfIt(label){
   return '<div class="empty in">All of it is '+esc(label)+'.</div>';
 }
 
+/* how many sectors show before "Show all" - not saved, it resets on reload */
+var SECTOR_TOP = 5, sectorsAll = false;
 function renderBreakdown(){
   var hs = scoped(state.bAcct);
   var total = sum(hs, val) || 1;
@@ -1157,11 +1071,11 @@ function renderBreakdown(){
   var byAcct = buckets(hs, function(h){ var o={}; o[h.acct]=val(h); return o; });
   if (bdSect("acct", byAcct.length > 1)){
     el("acctBars").innerHTML = byAcct.map(function(b){
-      return barRow(acctById(b.key).name + " · " + acctById(b.key).firm, b.value, b.value/total, acctColor(b.key), true);
+      return barRow(acctById(b.key).name + " · " + acctById(b.key).firm, b.value, b.value/total);
     }).join("");
   }
 
-  /* sectors - look-through, single-hue ramp so the order reads */
+  /* sectors - look-through. The top five, and the rest behind a tap. */
   var eq = hs.filter(function(h){ return h.cls==="us_stock"||h.cls==="intl_stock"||h.cls==="real_estate"; });
   var eqTotal = sum(eq, val) || 1;
   var sec = buckets(eq, function(h){
@@ -1172,9 +1086,14 @@ function renderBreakdown(){
   });
   if (bdSect("sector", sec.length > 0)){
     el("sectorNote").textContent = sec.length > 1 ? sec.length+" of "+SECTORS.length+" sectors" : "";
-    el("sectorBars").innerHTML = sec.length > 1 ? sec.map(function(b,i){
-      return barRow(b.key, b.value, b.value/eqTotal, ramp("var(--c-indigo)", i, sec.length));
-    }).join("") : allOfIt(sec[0].key);
+    var shown = sec.length > SECTOR_TOP && !sectorsAll ? sec.slice(0, SECTOR_TOP) : sec;
+    var hasRE = sec.length > 1 && shown.some(function(b){ return b.key==="Real Estate"; });
+    el("sectorBars").innerHTML = sec.length > 1 ? shown.map(function(b){
+      return barRow(b.key, b.value, b.value/eqTotal);
+    }).join("") + (hasRE ? '<div class="bars-cap">Real estate here also counts the property companies inside your stock funds.</div>' : "")
+      : allOfIt(sec[0].key);
+    el("sectorMore").innerHTML = sec.length > SECTOR_TOP
+      ? '<button class="more" data-sectors>'+(sectorsAll ? "Show fewer" : "Show all "+sec.length+" sectors")+'</button>' : "";
   }
 
   /* regions */
@@ -1188,18 +1107,17 @@ function renderBreakdown(){
   el("bdFoot").hidden = !(sec.length > 0 || showRegion);
   if (bdSect("region", showRegion)){
     el("regionBars").innerHTML = reg.length > 1 ? reg.map(function(b){
-      var meta = REGION_META[b.key] || {label:b.key, color:"var(--c-gray)"};
-      return barRow(meta.label, b.value, b.value/eqTotal, meta.color);
+      return barRow(regionLabel(b.key), b.value, b.value/eqTotal);
     }).join("") : allOfIt(regionLabel(reg[0].key));
   }
 
-  /* crypto categories - ramp off the crypto hue */
+  /* crypto categories */
   var cr = hs.filter(function(h){ return h.cls==="crypto"; });
   var crTotal = sum(cr, val) || 1;
   var cats = buckets(cr, function(h){ var o={}; o[h.cat || "Other crypto"] = val(h); return o; });
   if (bdSect("crypto", cats.length > 0)){
-    el("cryptoBars").innerHTML = cats.length > 1 ? cats.map(function(b,i){
-      return barRow(b.key, b.value, b.value/crTotal, ramp("var(--c-orange)", i, cats.length));
+    el("cryptoBars").innerHTML = cats.length > 1 ? cats.map(function(b){
+      return barRow(b.key, b.value, b.value/crTotal);
     }).join("") : allOfIt(cats[0].key);
   }
 
@@ -1209,11 +1127,12 @@ function renderBreakdown(){
     .sort(function(a,b){ return b.p-a.p; });
   function perfRows(arr){
     return arr.length ? arr.map(function(r){
-      return '<div class="row"><span class="dot" style="background:'+acctColor(r.h.acct)+'"></span>'+
+      var p = pct(r.p,1), g = signed(r.g);
+      return '<div class="row">'+
         '<div class="row-main"><div class="row-t">'+esc(r.h.tick)+' <span class="dim" style="font-weight:400">'+esc(r.h.name)+'</span></div>'+
         '<div class="row-s">'+esc(acctById(r.h.acct).name)+'</div></div>'+
-        '<div class="row-r"><div class="row-v num '+cls(r.p)+'">'+pct(r.p,1)+'</div>'+
-        '<div class="row-d num dim">'+signed(r.g)+'</div></div></div>';
+        '<div class="row-r"><div class="row-v num '+tone(p)+'">'+p+'</div>'+
+        '<div class="row-d num dim">'+g+'</div></div></div>';
     }).join("") : '<div class="empty">Nothing to rank yet.</div>';
   }
   /* never let the same holding appear in both cards - with fewer than four
@@ -1234,69 +1153,12 @@ function renderBreakdown(){
   }
 }
 
-/* ========================= markets tab ========================= */
-function sparkPath(seed, d){
-  var pts = walk(seed, 34, .011, 100, 100*(1+d/100)), i;
-  var lo=Math.min.apply(null,pts), hi=Math.max.apply(null,pts), span=(hi-lo)||1, out="";
-  for(i=0;i<pts.length;i++){
-    out += (i?"L":"M") + (i/(pts.length-1)*100).toFixed(2) + " " + (2 + (1-(pts[i]-lo)/span)*26).toFixed(2) + " ";
-  }
-  return out.trim();
-}
-function renderMarkets(){
-  el("mktChips").innerHTML = MKT_ORDER.map(function(k){
-    return '<button class="chip'+(state.market===k?" on":"")+'" data-mkt="'+k+'">'+MARKETS[k].title+'</button>';
-  }).join("");
-
-  /* the grid is the category you picked, biggest mover first */
-  var grp = MARKETS[state.market];
-  var gridRows = grp.rows.slice().sort(function(a,b){ return b.d-a.d; });
-  el("mktGrid").innerHTML = gridRows.map(function(r,i){
-    var c = r.d>=0 ? "var(--pos)" : "var(--neg)";
-    var v = r.pct ? r.v.toFixed(2)+"%"
-                  : r.v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-    var d = r.pct ? (r.d>=0?"+":"−")+Math.abs(r.d).toFixed(2)+" pp" : pct(r.d);
-    /* an odd count would otherwise leave the last card orphaned beside a gap */
-    var wide = (i === gridRows.length-1 && gridRows.length % 2) ? " wide" : "";
-    return '<div class="mcard'+wide+'"><div class="mcard-head">'+
-      '<div class="mcard-name">'+esc(r.n)+'</div><div class="mcard-sub">'+esc(r.s)+'</div></div>'+
-      '<div class="spark"><svg viewBox="0 0 100 30" preserveAspectRatio="none"><path d="'+sparkPath(r.s+state.market,r.d)+
-      '" fill="none" stroke="'+c+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg></div>'+
-      '<div class="mcard-foot"><div class="mcard-v num">'+v+'</div>'+
-      '<div class="mcard-d num '+cls(r.d)+'">'+d+'</div></div></div>';
-  }).join("");
-
-  /* the movers look across every category, so they never repeat the grid.
-     The sub-line names the market the row came from, not its trading code. */
-  var all = [];
-  MKT_ORDER.forEach(function(key){
-    MARKETS[key].rows.forEach(function(r){ all.push({r:r, from:MARKETS[key].title}); });
-  });
-  all.sort(function(a,b){ return b.r.d-a.r.d; });
-  function mrow(x){
-    var r = x.r;
-    var d = r.pct ? (r.d>=0?"+":"−")+Math.abs(r.d).toFixed(2)+" pp" : pct(r.d);
-    var v = r.pct ? r.v.toFixed(2)+"%" : r.v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-    return '<div class="row"><div class="row-main"><div class="row-t">'+esc(r.n)+'</div>'+
-      '<div class="row-s">'+esc(x.from)+'</div></div>'+
-      '<div class="row-r"><div class="row-v num">'+v+'</div><div class="row-d num '+cls(r.d)+'">'+d+'</div></div></div>';
-  }
-  el("mktUp").innerHTML   = all.slice(0,5).map(mrow).join("");
-  el("mktDown").innerHTML = all.slice(-5).reverse().map(mrow).join("");
-
-  var hour = state.updated.getHours();
-  var open = hour>=9 && hour<16;
-  el("mktSession").textContent = open ? "US market open" : "US market closed";
-  el("mktClock").textContent = state.updated.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
-}
-
 /* ========================= settings tab ========================= */
 function renderSettings(){
   el("acctManage").innerHTML = ACCOUNTS.map(function(a){
     var v = sum(HOLDINGS.filter(function(h){return h.acct===a.id;}), val);
     var n = HOLDINGS.filter(function(h){return h.acct===a.id;}).length;
     return '<button class="row" data-editacct="'+esc(a.id)+'">'+
-      '<span class="dot" style="background:'+acctColor(a.id)+'"></span>'+
       '<div class="row-main"><div class="row-t">'+esc(a.name)+'</div>'+
       '<div class="row-s">'+esc(a.firm||"No institution")+' · '+n+' holding'+(n===1?"":"s")+
         (a.off ? ' · not in the portfolio total' : '')+'</div></div>'+
@@ -1324,9 +1186,14 @@ function renderSettings(){
 }
 
 /* ========================= sheets ========================= */
-var sheetState = {};
 var lockedY = 0;
-function openSheet(title, html, after){
+/* the form the open sheet holds, if it holds one: {label, save, dirty}. With
+   no label there is no action up top - the review sheet keeps its in the body.
+   With no dirty, any field that differs from how it opened is an edit. */
+var sheetForm = null;
+function openSheet(title, html, after, form){
+  hideAsk();
+  sheetForm = form || null;
   el("sheetTitle").textContent = title;
   el("sheetBody").innerHTML = html;
   /* the page behind a sheet must not scroll, or the sheet is only a picture
@@ -1336,18 +1203,36 @@ function openSheet(title, html, after){
     document.body.style.top = (-lockedY)+"px";
     document.body.classList.add("locked");
   }
+  /* a form gets Cancel opposite the one thing it is for, as iOS sets them
+     out: a lone Done reads as "keep this", and on a form it used to throw the
+     edits away. A sheet that only shows things closes with Done. */
+  el("sheetCancel").hidden = !form;
+  el("sheetClose").hidden = !!form && !form.label;
+  el("sheetClose").textContent = form ? form.label || "" : "Done";
+  el("sheetClose").classList.toggle("go", !!form);
   el("app").setAttribute("aria-hidden","true");
   el("scrim").classList.add("on");
   el("sheet").classList.add("on");
   el("sheet").style.transform = "";
   if (after) after();
+  if (form && !form.dirty){
+    var opened = fieldValues();
+    form.dirty = function(){ return fieldValues() !== opened; };
+  }
   /* put the reader inside the dialog, not behind it. Never a text field -
      on iOS that raises the keyboard, and the viewport it leaves behind makes
      every later tap land somewhere else. */
-  try { el("sheetClose").focus({preventScroll:true}); } catch(err){}
+  try { el(form ? "sheetCancel" : "sheetClose").focus({preventScroll:true}); } catch(err){}
+}
+/* every value the open form holds, to tell whether leaving would lose any */
+function fieldValues(){
+  return JSON.stringify([].map.call(el("sheetBody").querySelectorAll("input,select,textarea"),
+    function(f){ return f.value; }));
 }
 function closeSheet(){
   try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(err){}
+  sheetForm = null;
+  hideAsk();
   el("scrim").classList.remove("on");
   el("sheet").classList.remove("on");
   el("sheet").classList.remove("drag");
@@ -1359,6 +1244,25 @@ function closeSheet(){
     window.scrollTo(0, lockedY);
   }
   setTimeout(function(){ if(!el("sheet").classList.contains("on")) el("sheetBody").innerHTML=""; }, 320);
+}
+/* Cancel, the scrim, Escape and the grabber all leave a sheet. A form that
+   holds edits asks first; one that holds none just goes. */
+function leaveSheet(){
+  if (sheetForm && sheetForm.dirty()) askDiscard(); else closeSheet();
+}
+function askDiscard(){
+  try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(err){}
+  el("sheet").setAttribute("aria-hidden","true");
+  el("ask").classList.add("on");
+  try { el("askNo").focus({preventScroll:true}); } catch(err){}
+}
+function hideAsk(){
+  el("ask").classList.remove("on");
+  el("sheet").removeAttribute("aria-hidden");
+}
+function keepEditing(){
+  hideAsk();
+  try { el("sheetCancel").focus({preventScroll:true}); } catch(err){}
 }
 /* the grabber is the universal "drag me down" signal - make it do that */
 (function(){
@@ -1380,7 +1284,8 @@ function closeSheet(){
     y0 = null;
     sheet.classList.remove("drag");
     sheet.style.transform = "";
-    if (dy > 120 || flick) closeSheet();
+    /* a form holding edits springs back and asks instead */
+    if (dy > 120 || flick) leaveSheet();
   }
   grip.addEventListener("touchend", end);
   grip.addEventListener("touchcancel", end);
@@ -1424,6 +1329,13 @@ function removeHolding(h, label){
     save(); renderAll(); toast(label+" is back");
   });
 }
+/* why a form's action did not go ahead. It sits first in the form, so the
+   form scrolls back up to it. */
+function formError(msg){
+  el("fErr").textContent = msg;
+  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el("sheetBody").scrollTo({top:0, behavior: calm ? "auto" : "smooth"});
+}
 function fieldText(id,label,ph,value,type){
   return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label>'+
     '<input id="'+id+'" type="'+(type||"text")+'" placeholder="'+esc(ph)+'" value="'+esc(value===undefined?"":value)+'"'+
@@ -1433,11 +1345,6 @@ function fieldSelect(id,label,opts,sel){
   return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label><select id="'+id+'">'+
     opts.map(function(o){ return '<option value="'+esc(o[0])+'"'+(o[0]===sel?" selected":"")+'>'+esc(o[1])+'</option>'; }).join("")+
     '</select></div>';
-}
-function swatchRow(sel){
-  return '<div class="swatches" id="swatches">'+SWATCHES.map(function(s){
-    return '<button class="sw'+(s.k===sel?" on":"")+'" data-sw="'+s.k+'" style="background:'+s.v+'" aria-label="'+s.k+'"></button>';
-  }).join("")+'</div>';
 }
 
 function sheetAddMenu(){
@@ -1457,42 +1364,40 @@ function sheetAddMenu(){
 }
 
 function sheetAccount(editId){
-  var a = editId ? acctById(editId) : {name:"",firm:"",color:SWATCHES[ACCOUNTS.length % SWATCHES.length].k};
-  sheetState.color = a.color;
-  var html = '<div class="card" style="margin-top:var(--s-2)">'+
+  var a = editId ? acctById(editId) : {name:"",firm:""};
+  var html = '<div class="err" id="fErr" role="alert"></div>'+
+    '<div class="card" style="margin-top:var(--s-2)">'+
     fieldText("fName","Name","Brokerage", a.name)+
     fieldText("fFirm","Institution","Fidelity", a.firm)+
-    '</div><div class="sect" style="margin-top:var(--s-7)">Color</div>'+
-    '<div class="card">'+swatchRow(a.color)+'</div>'+
-    '<div class="err" id="fErr"></div>'+
-    '<button class="btn" id="fSave">'+(editId?"Save account":"Add account")+'</button>'+
+    '</div>'+
     (editId ? '<button class="btn warn" id="fDel">Delete account</button>' : '')+
     (editId ? '<div class="note">Deleting an account also removes its holdings.</div>' : '');
+  function commit(){
+    var name = el("fName").value.trim();
+    if(!name){ formError("Give the account a name."); return; }
+    if (editId){
+      var a2 = acctById(editId); a2.name = name; a2.firm = el("fFirm").value.trim();
+    } else {
+      var id = "a"+Date.now().toString(36);
+      ACCOUNTS.push({id:id, name:name, firm:el("fFirm").value.trim(), color:"gray"});
+    }
+    save(); renderAll(); closeSheet(); toast(editId ? "Account saved" : "Account added");
+  }
   openSheet(editId ? "Edit account" : "New account", html, function(){
-    el("swatches").addEventListener("click", function(e){
-      var b = e.target.closest("[data-sw]"); if(!b) return;
-      sheetState.color = b.dataset.sw;
-      [].forEach.call(this.querySelectorAll(".sw"), function(x){ x.classList.toggle("on", x===b); });
-    });
-    el("fSave").addEventListener("click", function(){
-      var name = el("fName").value.trim();
-      if(!name){ el("fErr").textContent = "Give the account a name."; return; }
-      if (editId){
-        var a2 = acctById(editId); a2.name = name; a2.firm = el("fFirm").value.trim(); a2.color = sheetState.color;
-      } else {
-        var id = "a"+Date.now().toString(36);
-        ACCOUNTS.push({id:id, name:name, firm:el("fFirm").value.trim(), color:sheetState.color});
-      }
-      save(); renderAll(); closeSheet(); toast(editId ? "Account saved" : "Account added");
-    });
     if (editId) el("fDel").addEventListener("click", function(){
+      /* one tap takes the account and its holdings, so the toast puts both back */
+      var accounts = ACCOUNTS, holdings = HOLDINGS;
       HOLDINGS = HOLDINGS.filter(function(h){ return h.acct !== editId; });
       ACCOUNTS = ACCOUNTS.filter(function(x){ return x.id !== editId; });
       if (state.acct===editId) state.acct="all";
       if (state.bAcct===editId) state.bAcct="all";
-      save(); renderAll(); closeSheet(); toast("Account deleted");
+      save(); renderAll(); closeSheet();
+      toast("Account deleted", function(){
+        ACCOUNTS = accounts; HOLDINGS = holdings;
+        save(); renderAll(); toast("Account restored");
+      });
     });
-  });
+  }, {label: editId ? "Save" : "Add", save: commit});
 }
 
 var CLASS_OPTS = [["us_stock","US stock or fund"],["intl_stock","International stock or fund"],
@@ -1511,7 +1416,8 @@ function sheetHolding(preset, edit){
   var secOpts = [["","Not set"]].concat(SECTORS.map(function(s){ return [s,s]; }));
   if (spread) secOpts.unshift(["__keep","Fund, many sectors"]);
   var catOpts = CRYPTO_CATS.concat(["Other crypto"]).map(function(s){ return [s,s]; });
-  var html = '<div class="card" style="margin-top:var(--s-2)">'+
+  var html = '<div class="err" id="fErr" role="alert"></div>'+
+    '<div class="card" style="margin-top:var(--s-2)">'+
     fieldSelect("fAcct","Account", acctOpts, edit ? edit.acct : preset ? offAcct : (state.acct!=="all"?state.acct:ACCOUNTS[0].id))+
     fieldSelect("fCls","Type", CLASS_OPTS, edit ? edit.cls : preset || "us_stock")+
     fieldText("fTick","Symbol","VTI", edit && !OFF[edit.cls] ? edit.tick : "")+
@@ -1526,9 +1432,53 @@ function sheetHolding(preset, edit){
     fieldSelect("fSec","Sector", secOpts, spread ? "__keep" : edit && edit.mix ? Object.keys(edit.mix)[0] : "")+
     fieldSelect("fCat","Crypto category", catOpts, edit && edit.cat ? edit.cat : "Store of Value")+
     '</div>'+
-    '<div class="err" id="fErr"></div>'+
-    '<button class="btn" id="fSave">'+(edit?"Save changes":preset?"Add it":"Add holding")+'</button>'+
     '<div class="note">Cost per share is what you paid. Leave it blank and it uses the price you entered. The date you bought it is optional - it places the holding on the chart.</div>';
+  function commit(){
+    var tick = el("fTick").value.trim().toUpperCase();
+    var sh = parseFloat(el("fSh").value), px = parseFloat(el("fPx").value);
+    var cb = parseFloat(el("fCb").value), y = parseFloat(el("fY").value);
+    var kind = el("fCls").value;
+    if (OFF[kind]){
+      var label = el("fName2").value.trim();
+      if (!label){ formError("Give it a name."); return; }
+      if (!(Math.abs(px)>0)){ formError("Enter what it is worth."); return; }
+      var worth = kind==="loan" ? -Math.abs(px) : px;
+      var paid  = (isFinite(cb) && cb!==0) ? (kind==="loan" ? -Math.abs(cb) : cb) : worth;
+      var off = {acct:el("fAcct").value, tick:label.slice(0,10).toUpperCase(), name:label,
+        cls:kind, shares:1, price:worth, cost:paid, day:0, yield:0};
+      if (edit){
+        /* an on-market holding turned into one of these drops what no longer applies */
+        delete edit.mix; delete edit.cat; delete edit.region; delete edit.bought; delete edit.held;
+        Object.keys(off).forEach(function(k){ edit[k] = off[k]; });
+        save(); renderAll(); closeSheet(); toast(label+" updated"); return;
+      }
+      HOLDINGS.push(off);
+      save(); renderAll(); closeSheet(); toast(label+" added"); return;
+    }
+    if (!tick){ formError("Enter a symbol."); return; }
+    if (!(sh>0)){ formError("Enter how many shares you hold."); return; }
+    if (!(px>0)){ formError("Enter the current price."); return; }
+    var c = el("fCls").value;
+    var rec = edit || {};
+    rec.acct = el("fAcct").value; rec.tick = tick; rec.name = el("fName2").value.trim()||tick;
+    rec.cls = c; rec.shares = sh; rec.price = px; rec.cost = (cb>0?cb:px);
+    rec.day = rec.day || 0; rec.yield = (y>0?y:0);
+    if (c==="us_stock"||c==="intl_stock"||c==="real_estate"){
+      var sv = el("fSec").value;
+      if (sv === "__keep"){ /* the fund keeps the sector split it came with */ }
+      else if (sv) rec.mix = one(sv);
+      else delete rec.mix;
+      /* a fund spread over several regions keeps that spread */
+      if (!rec.region || Object.keys(rec.region).length < 2)
+        rec.region = c==="intl_stock" ? {developed:1} : {us:1};
+    } else { delete rec.mix; delete rec.region; }
+    if (c==="crypto") rec.cat = el("fCat").value; else delete rec.cat;
+    var bought = el("fBought").value;
+    if (bought && new Date(bought+"T00:00:00") < TODAY) rec.bought = bought;
+    else delete rec.bought;
+    if (edit){ save(); renderAll(); closeSheet(); toast(tick+" updated"); return; }
+    HOLDINGS.push(rec); save(); renderAll(); closeSheet(); toast(tick+" added");
+  }
   openSheet(edit ? "Edit "+(OFF[edit.cls] ? edit.name : edit.tick) :
             preset ? "Something you own" : "New holding", html, function(){
     function relabel(id,txt){ var l = document.querySelector('label[for="'+id+'"]'); if(l) l.textContent = txt; }
@@ -1548,53 +1498,7 @@ function sheetHolding(preset, edit){
       el("fCb").placeholder = off ? "148000" : "214.80";
     }
     el("fCls").addEventListener("change", sync); sync();
-    el("fSave").addEventListener("click", function(){
-      var tick = el("fTick").value.trim().toUpperCase();
-      var sh = parseFloat(el("fSh").value), px = parseFloat(el("fPx").value);
-      var cb = parseFloat(el("fCb").value), y = parseFloat(el("fY").value);
-      var kind = el("fCls").value;
-      if (OFF[kind]){
-        var label = el("fName2").value.trim();
-        if (!label){ el("fErr").textContent = "Give it a name."; return; }
-        if (!(Math.abs(px)>0)){ el("fErr").textContent = "Enter what it is worth."; return; }
-        var worth = kind==="loan" ? -Math.abs(px) : px;
-        var paid  = (isFinite(cb) && cb!==0) ? (kind==="loan" ? -Math.abs(cb) : cb) : worth;
-        var off = {acct:el("fAcct").value, tick:label.slice(0,10).toUpperCase(), name:label,
-          cls:kind, shares:1, price:worth, cost:paid, day:0, yield:0};
-        if (edit){
-          /* an on-market holding turned into one of these drops what no longer applies */
-          delete edit.mix; delete edit.cat; delete edit.region; delete edit.bought; delete edit.held;
-          Object.keys(off).forEach(function(k){ edit[k] = off[k]; });
-          save(); renderAll(); closeSheet(); toast(label+" updated"); return;
-        }
-        HOLDINGS.push(off);
-        save(); renderAll(); closeSheet(); toast(label+" added"); return;
-      }
-      if (!tick){ el("fErr").textContent = "Enter a symbol."; return; }
-      if (!(sh>0)){ el("fErr").textContent = "Enter how many shares you hold."; return; }
-      if (!(px>0)){ el("fErr").textContent = "Enter the current price."; return; }
-      var c = el("fCls").value;
-      var rec = edit || {};
-      rec.acct = el("fAcct").value; rec.tick = tick; rec.name = el("fName2").value.trim()||tick;
-      rec.cls = c; rec.shares = sh; rec.price = px; rec.cost = (cb>0?cb:px);
-      rec.day = rec.day || 0; rec.yield = (y>0?y:0);
-      if (c==="us_stock"||c==="intl_stock"||c==="real_estate"){
-        var sv = el("fSec").value;
-        if (sv === "__keep"){ /* the fund keeps the sector split it came with */ }
-        else if (sv) rec.mix = one(sv);
-        else delete rec.mix;
-        /* a fund spread over several regions keeps that spread */
-        if (!rec.region || Object.keys(rec.region).length < 2)
-          rec.region = c==="intl_stock" ? {developed:1} : {us:1};
-      } else { delete rec.mix; delete rec.region; }
-      if (c==="crypto") rec.cat = el("fCat").value; else delete rec.cat;
-      var bought = el("fBought").value;
-      if (bought && new Date(bought+"T00:00:00") < TODAY) rec.bought = bought;
-      else delete rec.bought;
-      if (edit){ save(); renderAll(); closeSheet(); toast(tick+" updated"); return; }
-      HOLDINGS.push(rec); save(); renderAll(); closeSheet(); toast(tick+" added");
-    });
-  });
+  }, {label: edit ? "Save" : "Add", save: commit});
 }
 
 function sheetOffDetail(idx){
@@ -1607,7 +1511,7 @@ function sheetOffDetail(idx){
     line("Type", esc(CLASS_META[h.cls].label))+
     line(h.cls==="loan" ? "Balance owed" : "Worth today", money(worth))+
     line("What you paid", money(paid))+
-    line("Change", '<span class="'+cls(g)+'">'+(g>=0?"+":"−")+usd(Math.abs(g))+'</span>')+
+    line("Change", '<span class="'+tone(signed(g))+'">'+signed(g)+'</span>')+
     '</div><button class="btn ghost" id="offEdit">Edit</button>'+
     '<button class="btn warn" id="offDel">Remove</button>'+
     '<div class="note">Kept out of the portfolio total and the chart. It counts towards net worth.</div>',
@@ -1634,7 +1538,7 @@ function sheetHoldDetail(idx){
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     line("Value", usd(val(h)))+
     line("Invested", usd(basis(h)))+
-    line("Gain", '<span class="'+cls(g)+'">'+signed(g)+" ("+pct(gp,1)+')</span>')+
+    line("Gain", '<span class="'+tone(signed(g))+'">'+signed(g)+" ("+pct(gp,1)+')</span>')+
     (h.yield ? line("Per year", usd(inc)) : "")+
     (h.mix ? line("Sector", esc(Object.keys(h.mix).length===1?Object.keys(h.mix)[0]:"Fund, many sectors")) : "")+
     (h.cat ? line("Crypto category", esc(h.cat)) : "")+
@@ -1824,13 +1728,15 @@ function sheetReview(rows, skipped, acct, back){
         toast(bits.join(", "));
       });
       el("rvBack").addEventListener("click", function(){ back ? back() : closeSheet(); });
-    });
+    }, {dirty: function(){ return true; }});
 }
 
 function acctOptions(){
   return ACCOUNTS.map(function(a){ return [a.id, a.name + (a.firm ? " · " + a.firm : "")]; });
 }
 function defaultAcct(){ return state.acct !== "all" ? state.acct : ACCOUNTS[0].id; }
+/* a list typed or pasted in, which closing the sheet would lose */
+function pasted(){ return el("fPaste").value.trim() !== ""; }
 
 function sheetImport(preset){
   if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
@@ -1842,17 +1748,14 @@ function sheetImport(preset){
     'Type is optional — stock, intl, crypto, bond, reit or cash.</div>' +
     '<textarea class="box" id="fPaste" style="margin-top:var(--s-5)" spellcheck="false" ' +
     'placeholder="VTI, 182, 312.44, 214.80\nBTC, 1.42, 86420, 41250, crypto">' +
-    esc((preset && preset.text) || "") + '</textarea>' +
-    '<button class="btn" id="fSave">Review</button>',
-    function(){
-      el("fSave").addEventListener("click", function(){
-        var acct = el("fAcct").value, text = el("fPaste").value;
-        var out = parseRows(text);
-        sheetReview(out.rows, out.skipped, acct, function(){
-          sheetImport({acct:acct, text:text});
-        });
+    esc((preset && preset.text) || "") + '</textarea>',
+    null, {label: "Review", dirty: pasted, save: function(){
+      var acct = el("fAcct").value, text = el("fPaste").value;
+      var out = parseRows(text);
+      sheetReview(out.rows, out.skipped, acct, function(){
+        sheetImport({acct:acct, text:text});
       });
-    });
+    }});
 }
 
 /* Reading a screenshot happens on the phone. The recogniser is fetched the
@@ -1884,8 +1787,7 @@ function sheetScan(preset){
     '<div class="note" id="fMsg"></div>' +
     '<textarea class="box" id="fPaste" style="margin-top:var(--s-5)" spellcheck="false" ' +
     'placeholder="Symbol, shares and price — one holding per line">' +
-    esc((preset && preset.text) || "") + '</textarea>' +
-    '<button class="btn" id="fGo">Review</button>',
+    esc((preset && preset.text) || "") + '</textarea>',
     function(){
       el("fPick").addEventListener("click", function(){ el("fPhoto").click(); });
       el("fPhoto").addEventListener("change", function(){
@@ -1931,15 +1833,13 @@ function sheetScan(preset){
           });
         });
       }
-
-      el("fGo").addEventListener("click", function(){
-        var acct = el("fAcct").value, text = el("fPaste").value;
-        var out = parseRows(text);
-        sheetReview(out.rows, out.skipped, acct, function(){
-          sheetScan({acct:acct, text:text});
-        });
+    }, {label: "Review", dirty: function(){ return !!file || pasted(); }, save: function(){
+      var acct = el("fAcct").value, text = el("fPaste").value;
+      var out = parseRows(text);
+      sheetReview(out.rows, out.skipped, acct, function(){
+        sheetScan({acct:acct, text:text});
       });
-    });
+    }});
 }
 
 function sheetAbout(){
@@ -1949,7 +1849,7 @@ function sheetAbout(){
     '<div class="row-s" style="white-space:normal">Every account you own, in one place.</div></div></div>'+
     '<div class="row"><div class="row-main"><div class="row-t">Where the numbers come from</div>'+
     '<div class="row-s" style="white-space:normal">An example portfolio. Price history is generated, anchored to each '+
-    'holding’s cost and current price. Market quotes are illustrative.</div></div></div>'+
+    'holding’s cost and current price.</div></div></div>'+
     '<div class="row"><div class="row-main"><div class="row-t">Your data</div>'+
     '<div class="row-s" style="white-space:normal">Anything you add is kept in this browser on this device. '+
     'Nothing is uploaded.</div></div></div>'+
@@ -1962,10 +1862,9 @@ function sheetAbout(){
 var ICONS = {
   portfolio:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17.5l5.2-5.6 3.4 3.1L21 5.5"/><path d="M15.4 5.5H21v5.4"/><path d="M3 21h18"/></svg>',
   breakdown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6V12l6.6 5.2"/></svg>',
-  markets:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V11"/><path d="M9.3 20V5"/><path d="M14.7 20v-6.6"/><path d="M20 20V8.4"/></svg>',
   settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M5 17h14"/><circle cx="9.4" cy="7" r="2.4"/><circle cx="14.6" cy="17" r="2.4"/></svg>'
 };
-var TABS = [["portfolio","Portfolio"],["breakdown","Breakdown"],["markets","Markets"],["settings","Settings"]];
+var TABS = [["portfolio","Portfolio"],["breakdown","Breakdown"],["settings","Settings"]];
 
 function renderTabs(){
   el("tabbar").innerHTML = TABS.map(function(t){
@@ -1976,6 +1875,8 @@ function renderTabs(){
 /* where each tab was left, so coming back lands where you were */
 var tabScroll = {};
 function setTab(k){
+  /* a tab that no longer exists lands on Portfolio */
+  if (!TABS.some(function(t){ return t[0]===k; })) k = "portfolio";
   /* tapping the tab you are already on is the iOS scroll-to-top gesture */
   if (k === state.tab){
     tabScroll[k] = 0;
@@ -2001,7 +1902,7 @@ function applyTheme(){
 }
 function renderAll(){
   seriesCache = {};
-  renderChips(); renderPeriods(); renderPortfolio(); renderBreakdown(); renderMarkets(); renderSettings(); renderTabs();
+  renderChips(); renderPeriods(); renderPortfolio(); renderBreakdown(); renderSettings(); renderTabs();
 }
 
 /* ========================= events ========================= */
@@ -2011,7 +1912,7 @@ document.addEventListener("click", function(e){
   if ((t = e.target.closest("[data-period]")))    { state.period = t.dataset.period; renderPeriods(); state.scrubIndex=null; paintHero(); return; }
   if ((t = e.target.closest("[data-acct]")))      { state.acct = t.dataset.acct; renderChips(); renderPortfolio(); return; }
   if ((t = e.target.closest("[data-bacct]")))     { state.bAcct = t.dataset.bacct; renderChips(); renderBreakdown(); return; }
-  if ((t = e.target.closest("[data-mkt]")))       { state.market = t.dataset.mkt; renderMarkets(); return; }
+  if ((t = e.target.closest("[data-sectors]")))   { sectorsAll = !sectorsAll; renderBreakdown(); return; }
   if ((t = e.target.closest("[data-theme]")))     { state.theme = t.dataset.theme; applyTheme(); save(); renderSettings(); return; }
   if ((t = e.target.closest("[data-editacct]")))  { sheetAccount(t.dataset.editacct); return; }
   if ((t = e.target.closest("[data-hold]")))      { sheetHoldDetail(+t.dataset.hold); return; }
@@ -2044,6 +1945,7 @@ document.addEventListener("click", function(e){
    and every tap after that is swallowed. Check on touch and let it go. */
 function unstick(){
   if (el("sheet").classList.contains("on")) return;
+  hideAsk();
   el("scrim").classList.remove("on");
   el("sheet").style.transform = "";
   el("app").removeAttribute("aria-hidden");
@@ -2057,9 +1959,20 @@ document.addEventListener("touchstart", unstick, {passive:true, capture:true});
 window.addEventListener("pageshow", unstick);
 document.addEventListener("visibilitychange", function(){ if(!document.hidden) unstick(); });
 
-el("sheetClose").addEventListener("click", closeSheet);
-el("scrim").addEventListener("click", closeSheet);
-document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeSheet(); });
+el("sheetCancel").addEventListener("click", leaveSheet);
+el("sheetClose").addEventListener("click", function(){
+  if (!sheetForm) closeSheet();
+  else if (sheetForm.save) sheetForm.save();
+});
+el("scrim").addEventListener("click", leaveSheet);
+el("askYes").addEventListener("click", closeSheet);
+el("askNo").addEventListener("click", keepEditing);
+el("ask").addEventListener("click", function(e){ if (e.target === this) keepEditing(); });
+document.addEventListener("keydown", function(e){
+  if (e.key !== "Escape") return;
+  if (el("ask").classList.contains("on")) keepEditing();
+  else if (el("sheet").classList.contains("on")) leaveSheet();
+});
 
 /* sticky header shadow */
 window.addEventListener("scroll", function(){
