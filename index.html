@@ -29,9 +29,9 @@ html,body{margin:0;padding:0}
   --chrome:rgba(248,248,250,.80);
   --float-shadow:0 8px 24px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.08);
   /* categorical palette - one hue per asset class, nothing else. Green and red
-     are reserved for gain and loss; --c-neutral fills every single-series bar. */
+     are reserved for gain and loss; single-series bars take the accent. */
   --c-blue:#0085fe; --c-teal:#00afc7; --c-orange:#ff8c00; --c-purple:#b052d0;
-  --c-rose:#ea008a; --c-gray:#6f6f6f; --c-neutral:#8e8e93;
+  --c-rose:#ea008a; --c-gray:#6f6f6f;
 
   /* ---- type. Eight steps, each one a real iOS text style. Nothing else. ---- */
   --t-cap2:11px;    /* Caption 2 - tickers, tab labels, the updated stamp */
@@ -70,7 +70,7 @@ html,body{margin:0;padding:0}
     --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
     --chrome:rgba(24,24,26,.76); --float-shadow:0 8px 24px rgba(0,0,0,.55);
     --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
-    --c-rose:#e55d8c; --c-gray:#b0b0b0; --c-neutral:#8e8e93;
+    --c-rose:#e55d8c; --c-gray:#b0b0b0;
     color-scheme:dark;
   }
   :root:not([data-theme="light"]) .sheet{
@@ -88,7 +88,7 @@ html,body{margin:0;padding:0}
   --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
   --chrome:rgba(24,24,26,.76); --float-shadow:0 8px 24px rgba(0,0,0,.55);
   --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
-  --c-rose:#e55d8c; --c-gray:#b0b0b0; --c-neutral:#8e8e93;
+  --c-rose:#e55d8c; --c-gray:#b0b0b0;
   color-scheme:dark;
 }
 
@@ -175,6 +175,10 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 button.row,.more,.ask-g button{transition:background-color .3s}
 button.row:active,.more:active,.ask-g button:active{transition:none}
 button.row:active{background:var(--surface-2)}
+/* an account being moved lifts off the list; the rest slide out of its way */
+#acctManage .row{transition:transform .2s cubic-bezier(.25,.8,.3,1)}
+#acctManage .row.lift{transition:none;z-index:2;background:var(--surface-2);box-shadow:var(--float-shadow);border-radius:var(--r-md)}
+#acctManage .row.lift::before,#acctManage .row.lift+.row::before{opacity:0}
 .chip,.tab,.btn{transition:transform .35s cubic-bezier(.3,1.5,.5,1),background-color .2s,color .2s}
 .chip:active,.tab:active,.btn:active{transform:scale(.96);transition-duration:.1s}
 .topbar-act,.sheet-x,.toast-u{transition:opacity .2s}
@@ -198,7 +202,8 @@ button.row:active{background:var(--surface-2)}
 .cross.on,.knob.on{opacity:1}
 
 .seg{display:flex;gap:var(--s-1);background:var(--surface-3);border-radius:var(--r-md);padding:var(--s-1);margin-top:var(--s-6)}
-.seg button{flex:1;padding:var(--s-3) 0;font-size:var(--t-foot);font-weight:500;border-radius:var(--r-sm);color:var(--label-2);min-height:32px;position:relative}
+/* the selected segment is concentric with its track: outer radius less the inset */
+.seg button{flex:1;padding:var(--s-3) 0;font-size:var(--t-foot);font-weight:500;border-radius:calc(var(--r-md) - var(--s-1));color:var(--label-2);min-height:32px;position:relative}
 .seg button::before{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%)}
 .seg button.on{background:var(--surface);color:var(--label);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.09)}
 :root[data-theme="dark"] .seg button.on,
@@ -232,7 +237,12 @@ button.row:active{background:var(--surface-2)}
 
 /* stacked allocation bar */
 .stack{display:flex;height:var(--s-5);border-radius:var(--r-xs);overflow:hidden;margin:var(--s-5) var(--rail);gap:var(--s-1);background:var(--surface)}
-.stack span{height:100%}
+.stack span{height:100%;min-width:var(--s-1)}
+/* WebKit does not always clip a flex child to its parent's rounded corner,
+   so the two outer ends carry their own radius */
+.stack span:first-child{border-radius:var(--r-xs) 0 0 var(--r-xs)}
+.stack span:last-child{border-radius:0 var(--r-xs) var(--r-xs) 0}
+.stack span:only-child{border-radius:var(--r-xs)}
 
 /* ---------- sheet ---------- */
 .scrim{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;transition:opacity .25s}
@@ -356,6 +366,11 @@ textarea.box{
 
       <div class="chips bleed" id="acctChips"></div>
 
+      <div class="card" id="pfEmpty" hidden style="margin-top:var(--s-5)">
+        <div class="empty">Nothing here yet.</div>
+        <div class="card-pad" style="padding-top:0"><button class="btn" data-sheet="holding" style="margin-top:0">Add a holding</button></div>
+      </div>
+      <div id="pfBody">
       <div class="card" style="margin-top:var(--s-5)">
         <div class="card-pad">
           <div class="hero-v num" id="heroValue">$0</div>
@@ -411,6 +426,7 @@ textarea.box{
 
       <div class="sect">Holdings</div>
       <div class="card" id="holdingsList"></div>
+      </div>
 
     </div>
   </section>
@@ -426,6 +442,11 @@ textarea.box{
 
       <div class="chips bleed" id="bAcctChips"></div>
 
+      <div class="card" id="bdEmpty" hidden style="margin-top:var(--s-5)">
+        <div class="empty">Nothing here yet.</div>
+        <div class="card-pad" style="padding-top:0"><button class="btn" data-sheet="holding" style="margin-top:0">Add a holding</button></div>
+      </div>
+      <div id="bdBody">
       <section data-bd="class">
         <div class="sect">By asset class</div>
         <div class="card">
@@ -463,9 +484,7 @@ textarea.box{
         <div class="sect">Laggards</div>
         <div class="card"><div id="worstList"></div></div>
       </div>
-      <div class="foot">Returns are since you bought each holding.</div>
-
-      <div class="foot" id="bdFoot" style="padding-top:0">Fund sector and region weights are approximate published allocations.</div>
+      </div>
     </div>
   </section>
 
@@ -502,7 +521,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Everything you enter stays on this device.<br>Build 11</div>
+      <div class="foot">Build 12</div>
     </div>
   </section>
 
@@ -550,9 +569,9 @@ function one(s){ var o={}; o[s]=1; return o; }
    get none. Green and red are reserved for gain and loss. */
 var CLASS_META = {
   us_stock:   {label:"US stocks",            color:"var(--c-blue)"},
-  intl_stock: {label:"International stocks", color:"var(--c-teal)"},
+  intl_stock: {label:"International stocks", color:"var(--c-purple)"},
   crypto:     {label:"Crypto",               color:"var(--c-orange)"},
-  bond:       {label:"Bonds",                color:"var(--c-purple)"},
+  bond:       {label:"Bonds",                color:"var(--c-teal)"},
   real_estate:{label:"Real estate",          color:"var(--c-rose)"},
   cash:       {label:"Cash",                 color:"var(--c-gray)"},
   /* things you own that no market prices - they sit outside the portfolio total,
@@ -680,7 +699,7 @@ function load(){
     var raw = localStorage.getItem(KEY);
     if (!raw) return;
     var d = JSON.parse(raw);
-    if (d && d.accounts && d.accounts.length) ACCOUNTS = d.accounts;
+    if (d && Array.isArray(d.accounts)) ACCOUNTS = d.accounts;
     if (d && d.holdings) HOLDINGS = d.holdings;
     if (d && d.theme) state.theme = d.theme;
   } catch(e){}
@@ -901,8 +920,10 @@ function paintHero(){
   el("todayValue").hidden = oneDay;
   el("todayPct").hidden = oneDay;
   syncTodayCard();
+  /* the selected segment already names the period; a caption only earns its
+     place while scrubbing, when it says which day the figure is */
   el("heroWhen").textContent = state.scrubIndex===null
-    ? periodDef(state.period).label
+    ? ""
     : dateAt(ix, n) + (dep ? " · " + usd(dep.v, 2) + " added" : "");
 
   var cross = el("cross"), knob = el("knob"), box = el("chartBox");
@@ -1045,13 +1066,13 @@ function barRow(name, value, share, color){
   /* only the asset-class card passes a colour. There the stacked bar above
      already draws every share, so each row is a legend entry - dot, name,
      figures - with no bar of its own, as iPhone Storage does it. Every other
-     card is one series in one neutral fill. */
+     card is one series in the accent, the one colour the app has to spare. */
   var head = '<span class="bar-n">'+esc(name)+'</span>'+
     '<span class="bar-v num">'+usd(value)+'</span>'+
     '<span class="bar-p num">'+(share*100).toFixed(1)+'%</span></div>';
   if (color) return '<div class="bar key"><div class="bar-h"><span class="dot" style="background:'+color+'"></span>'+head+'</div>';
   return '<div class="bar"><div class="bar-h">'+head+
-    '<div class="track"><div class="fill" style="width:'+Math.max(share*100,1.2).toFixed(2)+'%;background:var(--c-neutral)"></div></div></div>';
+    '<div class="track"><div class="fill" style="width:'+Math.max(share*100,1.2).toFixed(2)+'%;background:var(--accent-fill)"></div></div></div>';
 }
 function buckets(hs, keyFn, metaFn){
   var map = {};
@@ -1094,7 +1115,7 @@ function renderBreakdown(){
         return barRow(CLASS_META[b.key].label, b.value, b.value/total, CLASS_META[b.key].color);
       }).join("");
   el("classStack").innerHTML = classes.map(function(b){
-    return '<span style="width:'+(b.value/total*100).toFixed(2)+'%;background:'+CLASS_META[b.key].color+'"></span>';
+    return '<span style="flex:'+b.value.toFixed(2)+' 1 0;background:'+CLASS_META[b.key].color+'"></span>';
   }).join("");
 
   /* accounts - biggest to smallest */
@@ -1132,7 +1153,6 @@ function renderBreakdown(){
   });
   function regionLabel(k){ return (REGION_META[k] || {label:k}).label; }
   var showRegion = reg.length > 0;
-  el("bdFoot").hidden = !(sec.length > 0 || showRegion);
   if (bdSect("region", showRegion)){
     el("regionBars").innerHTML = reg.length > 1 ? reg.map(function(b){
       return barRow(regionLabel(b.key), b.value, b.value/eqTotal);
@@ -1204,9 +1224,12 @@ function renderSettings(){
   el("dataCard").innerHTML =
     '<div class="row"><div class="row-main"><div class="row-t">Holdings stored</div></div>'+
     '<div class="row-r"><div class="row-v num">'+HOLDINGS.length+' holding'+(HOLDINGS.length===1?"":"s")+'</div></div></div>'+
-    '<button class="row" data-reset="1"><div class="row-main">'+
+    '<button class="row" data-reset="empty"><div class="row-main">'+
+    '<div class="row-t" style="color:var(--neg)">Start empty</div>'+
+    '<div class="row-s">Removes every account and holding</div></div></button>'+
+    '<button class="row" data-reset="example"><div class="row-main">'+
     '<div class="row-t" style="color:var(--neg)">Reset to the example portfolio</div>'+
-    '<div class="row-s">Removes everything you have entered</div></div></button>';
+    '<div class="row-s">Replaces everything with sample accounts</div></div></button>';
 }
 
 /* ========================= sheets ========================= */
@@ -1575,11 +1598,53 @@ function sheetHoldDetail(idx){
     (h.yield ? line("Per year", usd(inc)) : "")+
     (h.mix ? line("Sector", esc(Object.keys(h.mix).length===1?Object.keys(h.mix)[0]:"Fund, many sectors")) : "")+
     (h.cat ? line("Crypto category", esc(h.cat)) : "")+
-    '</div><button class="btn ghost" id="fEdit">Edit holding</button>'+
+    '</div>'+(h.cls==="cash" ? "" : '<button class="btn ghost" id="fBuy">Record a buy</button>')+
+    '<button class="btn ghost" id="fEdit">Edit holding</button>'+
     '<button class="btn warn" id="fDel">Remove holding</button>', function(){
+      if (el("fBuy")) el("fBuy").addEventListener("click", function(){ sheetBuy(h); });
       el("fEdit").addEventListener("click", function(){ sheetHolding(null, h); });
       el("fDel").addEventListener("click", function(){ removeHolding(h, h.tick); });
     });
+}
+
+/* more shares of something already held: the count adds up and the cost per
+   share becomes the average of everything paid, weighted by shares */
+function sheetBuy(h){
+  var html = '<div class="err" id="fErr" role="alert"></div>'+
+    '<div class="card" style="margin-top:var(--s-2)">'+
+    fieldText("fBuySh","Shares bought","2","","number")+
+    fieldText("fBuyPx","Price per share", h.price.toFixed(2),"","number")+
+    '</div><div class="note" id="fBuyNote"></div>';
+  function read(){
+    var n = parseFloat(el("fBuySh").value), px = parseFloat(el("fBuyPx").value);
+    if (!(px > 0)) px = h.price;
+    if (!(n > 0)) return null;
+    var sh = h.shares + n;
+    return {shares:sh, cost:(h.shares*h.cost + n*px)/sh};
+  }
+  function preview(){
+    var r = read();
+    el("fBuyNote").textContent = r
+      ? "You will hold " + r.shares.toLocaleString("en-US",{maximumFractionDigits:6}) +
+        " shares at " + usd(r.cost,2) + " each on average."
+      : "You hold " + h.shares.toLocaleString("en-US",{maximumFractionDigits:6}) +
+        " shares at " + usd(h.cost,2) + " each on average.";
+  }
+  function commit(){
+    var r = read();
+    if (!r){ formError("Enter how many shares you bought."); return; }
+    var was = {shares:h.shares, cost:h.cost};
+    h.shares = r.shares; h.cost = r.cost;
+    save(); renderAll(); closeSheet();
+    toast(h.tick+" updated", function(){
+      h.shares = was.shares; h.cost = was.cost; save(); renderAll(); toast(h.tick+" restored");
+    });
+  }
+  openSheet("Buy "+h.tick, html, function(){
+    el("fBuySh").addEventListener("input", preview);
+    el("fBuyPx").addEventListener("input", preview);
+    preview();
+  }, {label:"Save", save:commit});
 }
 
 /* ========================= import pipeline =========================
@@ -1938,7 +2003,65 @@ function applyTheme(){
 function renderAll(){
   seriesCache = {};
   renderChips(); renderPeriods(); renderPortfolio(); renderBreakdown(); renderSettings(); renderTabs();
+  /* with nothing entered, a dashboard of zeros says less than one way to start */
+  var none = !HOLDINGS.length;
+  el("pfEmpty").hidden = el("bdEmpty").hidden = !none;
+  el("pfBody").hidden = el("bdBody").hidden = none;
 }
+
+/* ========================= reorder accounts ========================= */
+/* touch and hold an account in Settings, then drag it up or down. A finger
+   that moves before the hold lands is scrolling, and is left alone. */
+var acctDrag = null;
+(function(){
+  var list = el("acctManage"), HOLD = 380, SLOP = 8, timer = null, start = null, ate = false;
+  function rows(){ return [].slice.call(list.querySelectorAll("[data-editacct]")); }
+  function cancel(){ clearTimeout(timer); timer = null; start = null; }
+  list.addEventListener("touchstart", function(e){
+    var row = e.target.closest("[data-editacct]");
+    if (!row || e.touches.length > 1 || ACCOUNTS.length < 2) return;
+    start = {x:e.touches[0].clientX, y:e.touches[0].clientY, row:row};
+    timer = setTimeout(function(){
+      var rs = rows(), from = rs.indexOf(start.row);
+      acctDrag = {rows:rs, from:from, to:from, y0:start.y, h:start.row.getBoundingClientRect().height};
+      start.row.classList.add("lift");
+      list.classList.add("moving");
+    }, HOLD);
+  }, {passive:true});
+  list.addEventListener("touchmove", function(e){
+    var t = e.touches[0];
+    if (!acctDrag){
+      if (start && (Math.abs(t.clientX-start.x) > SLOP || Math.abs(t.clientY-start.y) > SLOP)) cancel();
+      return;
+    }
+    e.preventDefault();
+    var d = acctDrag, dy = t.clientY - d.y0, n = d.rows.length;
+    d.to = Math.max(0, Math.min(n-1, d.from + Math.round(dy / d.h)));
+    d.rows.forEach(function(r, i){
+      if (i === d.from) { r.style.transform = "translateY("+dy+"px)"; return; }
+      var shift = (i > d.from && i <= d.to) ? -d.h : (i < d.from && i >= d.to) ? d.h : 0;
+      r.style.transform = shift ? "translateY("+shift+"px)" : "";
+    });
+  }, {passive:false});
+  function end(){
+    cancel();
+    var d = acctDrag; if (!d) return;
+    acctDrag = null; ate = true;
+    list.classList.remove("moving");
+    d.rows.forEach(function(r){ r.style.transform = ""; r.classList.remove("lift"); });
+    if (d.to !== d.from){
+      ACCOUNTS.splice(d.to, 0, ACCOUNTS.splice(d.from, 1)[0]);
+      save(); renderAll();
+    }
+  }
+  list.addEventListener("touchend", end);
+  list.addEventListener("touchcancel", end);
+  /* the lift was a hold, not a tap: the click it ends in must not open the account */
+  list.addEventListener("click", function(e){
+    if (ate){ ate = false; e.stopPropagation(); e.preventDefault(); }
+  }, true);
+  list.addEventListener("touchstart", function(){ ate = false; }, {passive:true, capture:true});
+})();
 
 /* ========================= events ========================= */
 document.addEventListener("click", function(e){
@@ -1954,13 +2077,14 @@ document.addEventListener("click", function(e){
   if ((t = e.target.closest("[data-editacct]")))  { sheetAccount(t.dataset.editacct); return; }
   if ((t = e.target.closest("[data-hold]")))      { sheetHoldDetail(+t.dataset.hold); return; }
   if ((t = e.target.closest("[data-reset]")))     {
-    confirmAction("Reset portfolio?",
-      "Every account and holding you have entered is removed and the example portfolio comes back. This cannot be undone.",
-      "Reset everything", function(){
-        try { localStorage.removeItem(KEY); } catch(err){}
-        ACCOUNTS = clone(SEED_ACCOUNTS); HOLDINGS = clone(SEED_HOLDINGS);
+    var empty = t.dataset.reset === "empty";
+    confirmAction(empty ? "Start empty?" : "Reset portfolio?",
+      empty ? "Every account and holding is removed, so you can add your own. This cannot be undone."
+            : "Every account and holding you have entered is removed and the example portfolio comes back. This cannot be undone.",
+      empty ? "Remove everything" : "Reset everything", function(){
+        ACCOUNTS = empty ? [] : clone(SEED_ACCOUNTS); HOLDINGS = empty ? [] : clone(SEED_HOLDINGS);
         state.acct = "all"; state.bAcct = "all"; save(); renderAll();
-        toast("Reset to the example portfolio");
+        toast(empty ? "Portfolio cleared" : "Reset to the example portfolio");
       });
     return;
   }
@@ -2040,7 +2164,7 @@ window.addEventListener("scroll", syncTopbars, {passive:true});
   }, {passive:true});
 
   document.addEventListener("touchmove", function(e){
-    if (y0 === null) return;
+    if (y0 === null || acctDrag) return;
     var p = ptr(); if (!p || p.classList.contains("busy")) return;
     var dy = e.touches[0].clientY - y0 - DEAD, dx = Math.abs(e.touches[0].clientX - x0);
     if (dy <= 0 || window.scrollY > 0) { if(pulling){ p.style.height="0px"; pulling=false; } return; }
