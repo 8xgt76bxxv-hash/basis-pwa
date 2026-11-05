@@ -228,14 +228,6 @@ button.row:active{background:var(--surface-2)}
 .more:active{background:var(--surface-2)}
 
 
-/* net worth rows - same two rails as .row */
-.nw{padding:var(--s-2) var(--rail)}
-.nw-r{display:flex;align-items:center;gap:var(--s-4);padding:var(--s-4) 0;position:relative;width:100%;text-align:left}
-.nw-r+.nw-r::before{content:"";position:absolute;left:0;right:0;top:0;height:.5px;background:var(--sep)}
-.nw-m{flex:1;min-width:0}
-.nw-n{font-size:var(--t-sub);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nw-s{font-size:var(--t-cap);color:var(--label-2);margin-top:var(--s-1)}
-.nw-v{font-size:var(--t-sub);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* stacked allocation bar */
 .stack{display:flex;height:var(--s-5);border-radius:var(--r-xs);overflow:hidden;margin:var(--s-5) var(--rail);gap:var(--s-1);background:var(--surface)}
@@ -407,10 +399,6 @@ textarea.box{
         </div>
       </div>
 
-      <div class="card" id="netWorthCard" hidden>
-        <div class="card-h"><div class="card-t">Net worth</div><div class="card-s num" id="netWorthTotal"></div></div>
-        <div class="nw" id="netWorthRows"></div>
-      </div>
 
       <div class="card">
         <div class="card-h"><div class="card-t">Estimated income</div><div class="card-s" id="incomeYield"></div></div>
@@ -664,6 +652,7 @@ function walk(seed,n,vol,from,to){
   return out;
 }
 
+function money(v,dp){ return v<0 ? "−"+usd(-v,dp) : usd(v,dp); }
 function usd(n,dp){
   var d = dp===undefined ? (Math.abs(n)>=1000?0:2) : dp;
   return "$"+n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -710,8 +699,11 @@ function acctById(id){ for(var i=0;i<ACCOUNTS.length;i++) if(ACCOUNTS[i].id===id
 function inScope(h, scope){ return scope==="all" || h.acct===scope; }
 function val(h){ return h.shares * h.price; }
 function basis(h){ return h.shares * h.cost; }
-function scoped(scope){ return HOLDINGS.filter(function(h){ return !OFF[h.cls] && inScope(h,scope); }); }
-function offHoldings(){ return HOLDINGS.filter(function(h){ return OFF[h.cls]; }); }
+/* Everything you own counts in the total, a house and a mortgage included.
+   What has no market - no price, no sectors, no yield - stays out of the
+   allocation and the rankings, which are about investments. */
+function scoped(scope){ return HOLDINGS.filter(function(h){ return inScope(h,scope); }); }
+function invested(scope){ return scoped(scope).filter(function(h){ return !OFF[h.cls]; }); }
 function liveAccounts(){ return ACCOUNTS.filter(function(a){ return !a.off; }); }
 function sum(arr,f){ var t=0; for(var i=0;i<arr.length;i++) t+=f(arr[i]); return t; }
 
@@ -752,6 +744,23 @@ function holdingSeries(h, periodKey){
   if (seriesCache[key]) return seriesCache[key];
   var vol = VOL[h.cls] !== undefined ? VOL[h.cls] : .009;
   var out, i;
+  if (OFF[h.cls]){
+    /* no prices to walk: a straight line from what you paid to what it is
+       worth now, and flat through today */
+    var span = Math.min(heldDays(h), N_DAYS-1) + 1;
+    if (periodKey === "1D"){ out = []; for(i=0;i<N_INTRA;i++) out.push(h.price); }
+    else {
+      out = [];
+      for(i=0;i<N_DAYS;i++){
+        var k = i - (N_DAYS - span);
+        out.push(k < 0 ? 0 : span < 2 ? h.price : h.cost + (h.price-h.cost)*k/(span-1));
+      }
+      out = out.slice(Math.max(0, N_DAYS - (periodDef(periodKey).n+1)));
+    }
+    for(i=0;i<out.length;i++) out[i] = out[i]*h.shares;
+    seriesCache[key] = out;
+    return out;
+  }
   if (periodKey === "1D"){
     var prev = h.day ? h.price/(1+h.day/100) : h.price;
     out = walk(h.acct+h.tick+"intra", N_INTRA, vol/7, prev || h.price, h.price);
@@ -882,7 +891,7 @@ function paintHero(){
   for(q=1;q<=hi;q++) weighted += ((inv[q] || 0) - (inv[q-1] || 0)) * (T-q)/T;
   var base = first + weighted, dp = base ? mkt/base*100 : 0;
 
-  el("heroValue").textContent = usd(here, 2);
+  el("heroValue").textContent = money(here, 2);
   var mAbs = signed(mkt), mPct = pct(dp);
   var mTone = tone(mAbs) !== "dim" ? tone(mAbs) : tone(mPct);
   el("heroDelta").innerHTML = '<span class="'+mTone+'">'+
@@ -959,7 +968,7 @@ function bindChart(){
 /* ========================= portfolio tab ========================= */
 function renderChips(){
   var html = '<button class="chip'+(state.acct==="all"?" on":"")+'" data-acct="all">All accounts</button>';
-  liveAccounts().forEach(function(a){
+  ACCOUNTS.forEach(function(a){
     html += '<button class="chip'+(state.acct===a.id?" on":"")+'" data-acct="'+a.id+'">'+esc(a.name)+'</button>';
   });
   el("acctChips").innerHTML = html;
@@ -976,24 +985,24 @@ function renderPortfolio(){
   var dayAbs = sum(hs, function(h){ var p=h.price, prev = h.day ? p/(1+h.day/100) : p; return (p-prev)*h.shares; });
   var dayPct = (total-dayAbs) ? dayAbs/(total-dayAbs)*100 : 0;
   var gain = total - cost, gpct = cost ? gain/cost*100 : 0;
+  var inv = invested(state.acct), invTotal = sum(inv, val), invCost = sum(inv, basis);
   var income = sum(hs, function(h){ return val(h)*(h.yield||0)/100; });
 
   var tAbs = signed(dayAbs), tPct = pct(dayPct);
   el("todayAbs").innerHTML = '<span class="'+tone(tAbs)+'">'+tAbs+'</span>';
   el("todayPct").innerHTML = '<span class="'+tone(tPct)+'">'+tPct+'</span>';
-  el("totalCost").textContent = usd(cost);
+  el("totalCost").textContent = money(cost);
   var gAbs = signed(gain), gPct = pct(gpct);
   el("totalGain").innerHTML = '<span class="'+tone(gAbs)+'">'+gAbs+'</span>';
   el("returnPct").innerHTML = '<span class="'+tone(gPct)+'">'+gPct+'</span>';
   el("incomeYear").textContent = usd(income);
   el("incomeMonth").textContent = usd(income/12);
-  el("incomeYield").textContent = total ? (income/total*100).toFixed(2)+"% on value" : "";
-  el("incomeOnCost").textContent = cost ? (income/cost*100).toFixed(2)+"%" : "—";
-  var live = liveAccounts().length;
+  el("incomeYield").textContent = invTotal ? (income/invTotal*100).toFixed(2)+"% on value" : "";
+  el("incomeOnCost").textContent = invCost ? (income/invCost*100).toFixed(2)+"%" : "—";
+  var live = ACCOUNTS.length;
   el("pSub").textContent = state.acct==="all"
     ? "Across " + live + " account" + (live===1?"":"s")
     : acctById(state.acct).name + (acctById(state.acct).firm ? " · "+acctById(state.acct).firm : "");
-  renderNetWorth();
 
   /* today's movers, within scope, biggest absolute dollar move first */
   var movers = hs.filter(function(h){ return h.day; })
@@ -1018,13 +1027,17 @@ function renderPortfolio(){
     var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0, gTxt = pct(gp,1);
     /* the same fund can sit in two accounts - across all of them, say which */
     var qty = h.shares.toLocaleString("en-US",{maximumFractionDigits:4})+" × "+usd(h.price,2);
-    var sub = h.cls==="cash" ? acctById(h.acct).name
+    var off = !!OFF[h.cls], named = off || h.cls==="cash";
+    var sub = off ? CLASS_META[h.cls].label
+            : h.cls==="cash" ? acctById(h.acct).name
             : state.acct==="all" ? acctById(h.acct).name+" · "+qty : qty;
+    /* a loan has no return to speak of */
+    if (h.cls==="loan") gTxt = "";
     return '<button class="row" data-hold="'+i+'">'+
-      '<div class="row-main"><div class="row-t">'+esc(h.cls==="cash"?h.name:h.tick)+
-      (h.cls==="cash"?"":' <span class="dim" style="font-weight:400">'+esc(h.name)+'</span>')+'</div>'+
+      '<div class="row-main"><div class="row-t">'+esc(named?h.name:h.tick)+
+      (named?"":' <span class="dim" style="font-weight:400">'+esc(h.name)+'</span>')+'</div>'+
       '<div class="row-s">'+esc(sub)+'</div></div>'+
-      '<div class="row-r"><div class="row-v num">'+usd(val(h))+'</div>'+
+      '<div class="row-r"><div class="row-v num">'+money(val(h))+'</div>'+
       '<div class="row-d num '+tone(gTxt)+'">'+gTxt+'</div></div><div class="chev"></div></button>';
   }).join("") : '<div class="empty">Nothing in this account yet.<br>Tap Add to put something in it.</div>';
   el("holdingsList").dataset.scope = state.acct;
@@ -1032,32 +1045,6 @@ function renderPortfolio(){
   el("updatedAt").textContent = "Updated " + state.updated.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
   state.scrubIndex = null;
   paintHero();
-}
-
-/* Everything you own, priceless things included. Kept out of the portfolio
-   total on purpose: a house does not have a Tuesday. */
-function renderNetWorth(){
-  var off = offHoldings(), card = el("netWorthCard");
-  if (!off.length){ card.hidden = true; return; }
-  card.hidden = false;
-  var invested = sum(scoped("all"), val);
-  var rows = [{name:"Investments", sub:liveAccounts().length+" accounts", v:invested, idx:-1}];
-  off.map(function(h,i){ return {h:h, i:i}; })
-     .sort(function(a,b){ return val(b.h)-val(a.h); })
-     .forEach(function(o){
-       rows.push({name:o.h.name, sub:CLASS_META[o.h.cls].label, v:val(o.h), idx:o.i});
-     });
-  var worth = 0;
-  rows.forEach(function(r){ worth += r.v; });
-  el("netWorthTotal").textContent = usd(worth);
-  el("netWorthRows").innerHTML = rows.map(function(r){
-    var money = r.v < 0 ? "−"+usd(-r.v) : usd(r.v);
-    var tag = r.idx < 0 ? "div" : "button";
-    return '<'+tag+' class="nw-r"'+(r.idx<0?"":' data-off="'+r.idx+'"')+'>'+
-      '<div class="nw-m"><div class="nw-n">'+esc(r.name)+'</div>'+
-      '<div class="nw-s">'+esc(r.sub)+'</div></div>'+
-      '<div class="nw-v num">'+money+'</div></'+tag+'>';
-  }).join("");
 }
 
 /* ========================= breakdown tab ========================= */
@@ -1101,7 +1088,7 @@ function allOfIt(label){
 /* how many sectors show before "Show all" - not saved, it resets on reload */
 var SECTOR_TOP = 5, sectorsAll = false;
 function renderBreakdown(){
-  var hs = scoped(state.bAcct);
+  var hs = invested(state.bAcct);
   var total = sum(hs, val) || 1;
   el("bSub").textContent = (state.bAcct==="all" ? "What you own, by weight" : acctById(state.bAcct).name + " · " + usd(sum(hs,val)));
 
@@ -1416,7 +1403,7 @@ function sheetAddMenu(){
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     '<button class="row" data-sheet="offAsset"><div class="row-main"><div class="row-t">Something you own</div>'+
     '<div class="row-s">A home, a car, a collectible or a loan</div></div><div class="chev"></div></button>'+
-    '</div><div class="note">Things you own outside the market count towards net worth, not the portfolio.</div>');
+    '</div>');
 }
 
 function sheetAccount(editId){
@@ -1557,10 +1544,8 @@ function sheetHolding(preset, edit){
   }, {label: edit ? "Save" : "Add", save: commit});
 }
 
-function sheetOffDetail(idx){
-  var h = offHoldings()[idx]; if(!h) return;
+function sheetOffDetail(h){
   var worth = val(h), paid = basis(h), g = worth - paid;
-  function money(v){ return v<0 ? "−"+usd(-v) : usd(v); }
   function line(k,v){ return '<div class="row"><div class="row-main"><div class="row-t">'+k+
     '</div></div><div class="row-r"><div class="row-v num">'+v+'</div></div></div>'; }
   openSheet(h.name, '<div class="card" style="margin-top:var(--s-2)">'+
@@ -1569,8 +1554,7 @@ function sheetOffDetail(idx){
     line("What you paid", money(paid))+
     line("Change", '<span class="'+tone(signed(g))+'">'+signed(g)+'</span>')+
     '</div><button class="btn ghost" id="offEdit">Edit</button>'+
-    '<button class="btn warn" id="offDel">Remove</button>'+
-    '<div class="note">Kept out of the portfolio total and the chart. It counts towards net worth.</div>',
+    '<button class="btn warn" id="offDel">Remove</button>',
     function(){
       el("offEdit").addEventListener("click", function(){ sheetHolding(null, h); });
       el("offDel").addEventListener("click", function(){ removeHolding(h, h.name); });
@@ -1581,6 +1565,7 @@ function sheetHoldDetail(idx){
   var hs = scoped(el("holdingsList").dataset.scope || "all");
   var sorted = hs.slice().sort(function(a,b){ return val(b)-val(a); });
   var h = sorted[idx]; if(!h) return;
+  if (OFF[h.cls]) return sheetOffDetail(h);
   var g = val(h)-basis(h), gp = basis(h)?g/basis(h)*100:0;
   var inc = val(h)*(h.yield||0)/100;
   function line(k,v){ return '<div class="row"><div class="row-main"><div class="row-t">'+k+
@@ -1976,7 +1961,6 @@ document.addEventListener("click", function(e){
   if ((t = e.target.closest("[data-theme]")))     { state.theme = t.dataset.theme; applyTheme(); save(); renderSettings(); return; }
   if ((t = e.target.closest("[data-editacct]")))  { sheetAccount(t.dataset.editacct); return; }
   if ((t = e.target.closest("[data-hold]")))      { sheetHoldDetail(+t.dataset.hold); return; }
-  if ((t = e.target.closest("[data-off]")))       { sheetOffDetail(+t.dataset.off); return; }
   if ((t = e.target.closest("[data-reset]")))     {
     confirmAction("Reset portfolio?",
       "Every account and holding you have entered is removed and the example portfolio comes back. This cannot be undone.",
