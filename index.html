@@ -22,6 +22,9 @@ html,body{margin:0;padding:0}
   --bg:#f2f2f7; --surface:#fdfdfb; --surface-2:#f6f6f8; --surface-3:#ececf0;
   --sep:rgba(60,60,67,.13); --sep-strong:rgba(60,60,67,.22);
   --label:#000; --label-2:rgba(60,60,67,.78); --label-3:rgba(60,60,67,.56);
+  /* label-2 split into an opaque colour and an alpha, for line icons whose
+     strokes cross: opacity on the whole icon blends once, rgba blends per stroke */
+  --label-2-rgb:rgb(60,60,67); --label-2-a:.78;
   --accent:#5856d6; --accent-fill:#5856d6; --pos:#1d7a34; --neg:#d70015;
   --chrome:rgba(248,248,250,.80);
   --float-shadow:0 8px 24px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.08);
@@ -63,7 +66,7 @@ html,body{margin:0;padding:0}
   :root:not([data-theme="light"]){
     --bg:#000; --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
     --sep:rgba(84,84,88,.42); --sep-strong:rgba(84,84,88,.65);
-    --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55);
+    --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55); --label-2-rgb:rgb(235,235,245); --label-2-a:.62;
     --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
     --chrome:rgba(24,24,26,.76); --float-shadow:0 8px 24px rgba(0,0,0,.55);
     --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
@@ -81,7 +84,7 @@ html,body{margin:0;padding:0}
 :root[data-theme="dark"]{
   --bg:#000; --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
   --sep:rgba(84,84,88,.42); --sep-strong:rgba(84,84,88,.65);
-  --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55);
+  --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55); --label-2-rgb:rgb(235,235,245); --label-2-a:.62;
   --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
   --chrome:rgba(24,24,26,.76); --float-shadow:0 8px 24px rgba(0,0,0,.55);
   --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
@@ -219,14 +222,11 @@ button.row:active{background:var(--surface-2)}
 .track{height:var(--s-4);border-radius:var(--r-xs);background:var(--surface-3);overflow:hidden}
 .bar.key .bar-h{align-items:center;margin-bottom:0}
 .fill{height:100%;border-radius:var(--r-xs);transition:width .4s cubic-bezier(.25,.8,.3,1)}
-.bars-cap{font-size:var(--t-cap);color:var(--label-2);line-height:1.45;padding:var(--s-2) 0 var(--s-4)}
 .more{display:flex;align-items:center;width:100%;min-height:44px;padding:0 var(--rail);position:relative;
   font-size:var(--t-sub);color:var(--accent);text-align:left}
 .more::before{content:"";position:absolute;left:var(--rail);right:0;top:0;height:.5px;background:var(--sep)}
 .more:active{background:var(--surface-2)}
 
-.hero-add{font-size:var(--t-cap);color:var(--label-2);margin-top:var(--s-2);font-variant-numeric:tabular-nums}
-.tkey{display:inline-block;width:var(--s-1);height:var(--s-5);border-radius:var(--r-pill);background:var(--accent);opacity:.55;margin-right:var(--s-4);vertical-align:-1px}
 
 /* net worth rows - same two rails as .row */
 .nw{padding:var(--s-2) var(--rail)}
@@ -324,6 +324,7 @@ textarea.box{
 .tab{height:calc(var(--tabbar) - 2*var(--s-2));border-radius:var(--r-pill);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-1);color:var(--label-2)}
 .tab.on{color:var(--accent);background:var(--surface-3)}
 .tab svg{width:var(--s-8);height:var(--s-8);display:block}
+.tab:not(.on) svg{color:var(--label-2-rgb);opacity:var(--label-2-a)}
 .tab span{font-size:var(--t-cap2);font-weight:500;letter-spacing:0}
 
 .empty{text-align:center;color:var(--label-2);font-size:var(--t-sub);padding:var(--s-8) var(--rail);line-height:1.5}
@@ -367,7 +368,6 @@ textarea.box{
         <div class="card-pad">
           <div class="hero-v num" id="heroValue">$0</div>
           <div class="hero-d"><span id="heroDelta" class="num"></span><span class="hero-when" id="heroWhen"></span></div>
-          <div class="hero-add" id="heroAdd" hidden></div>
           <div class="chart" id="chartBox">
             <svg viewBox="0 0 1000 300" preserveAspectRatio="none" aria-hidden="true">
               <defs>
@@ -424,7 +424,7 @@ textarea.box{
       <div class="sect">Holdings</div>
       <div class="card" id="holdingsList"></div>
 
-      <div class="foot">Example portfolio. Values are illustrative.</div>
+      <div class="foot" id="exampleFoot">Example portfolio. Values are illustrative.</div>
     </div>
   </section>
 
@@ -495,8 +495,7 @@ textarea.box{
       <div class="sect">Accounts</div>
       <div class="card" id="acctManage"></div>
       <div class="card">
-        <button class="row" data-sheet="account"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add an account</div>
-        <div class="row-s">A brokerage, an IRA, a wallet, a savings account</div></div><div class="chev"></div></button>
+        <button class="row" data-sheet="account"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add an account</div></div><div class="chev"></div></button>
       </div>
 
       <div class="sect">Appearance</div>
@@ -789,6 +788,28 @@ function portfolioSeries(scope, periodKey){
 
 /* ========================= chart ========================= */
 var chartPts = [];
+/* A monotone cubic through every point (Fritsch-Carlson): the line rounds off
+   between days but never bulges past a real value, so a high on the chart is
+   a high that happened. */
+function smoothPath(P){
+  var n = P.length, i, f = function(v){ return v.toFixed(1); };
+  if (n < 3) return P.map(function(p,ix){ return (ix?"L":"M")+f(p.x)+" "+f(p.y); }).join(" ");
+  var dx = [], m = [], t = [];
+  for(i=0;i<n-1;i++){ dx[i] = P[i+1].x-P[i].x; m[i] = dx[i] ? (P[i+1].y-P[i].y)/dx[i] : 0; }
+  t[0] = m[0]; t[n-1] = m[n-2];
+  for(i=1;i<n-1;i++) t[i] = m[i-1]*m[i] <= 0 ? 0 : (m[i-1]+m[i])/2;
+  for(i=0;i<n-1;i++){
+    if (!m[i]) { t[i] = t[i+1] = 0; continue; }
+    var a = t[i]/m[i], b = t[i+1]/m[i], h = a*a+b*b;
+    if (h > 9){ var k = 3/Math.sqrt(h); t[i] = k*a*m[i]; t[i+1] = k*b*m[i]; }
+  }
+  var d = "M"+f(P[0].x)+" "+f(P[0].y);
+  for(i=0;i<n-1;i++){
+    var c = dx[i]/3;
+    d += " C"+f(P[i].x+c)+" "+f(P[i].y+t[i]*c)+" "+f(P[i+1].x-c)+" "+f(P[i+1].y-t[i+1]*c)+" "+f(P[i+1].x)+" "+f(P[i+1].y);
+  }
+  return d;
+}
 function drawChart(series, invested){
   var W=1000, H=300, PAD=14, i;
   var lo=Infinity, hi=-Infinity;
@@ -798,11 +819,7 @@ function drawChart(series, invested){
   chartPts = series.map(function(v,ix){
     return { x: series.length<2?0:ix/(series.length-1)*W, y: PAD + (1-(v-lo)/span)*(H-2*PAD), v:v };
   });
-  var d="", a="";
-  for(i=0;i<chartPts.length;i++){
-    d += (i?"L":"M") + chartPts[i].x.toFixed(1) + " " + chartPts[i].y.toFixed(1) + " ";
-  }
-  a = d + "L"+W+" "+H+" L0 "+H+" Z";
+  var d = smoothPath(chartPts), a = d + " L"+W+" "+H+" L0 "+H+" Z";
   el("chartLine").setAttribute("d", d.trim());
   el("chartArea").setAttribute("d", a.trim());
 
@@ -843,6 +860,17 @@ function paintHero(){
   drawChart(series, inv);
   var n = series.length, q;
   var ix = state.scrubIndex === null ? n-1 : Math.max(0, Math.min(n-1, state.scrubIndex));
+  /* the ticks under the chart are deposits. A finger near one lands on it, and
+     the date line says what went in */
+  var dep = 0;
+  if (state.scrubIndex !== null){
+    var tol = Math.max(1, Math.round(n*0.015));
+    for(q=Math.max(1, ix-tol); q<=Math.min(n-1, ix+tol, inv.length-1); q++){
+      var step = (inv[q] || 0) - (inv[q-1] || 0);
+      if (step > 1 && (!dep || Math.abs(q-ix) < Math.abs(dep.ix-ix))) dep = {ix:q, v:step};
+    }
+    if (dep) ix = dep.ix;
+  }
   var first = series[0], here = series[ix];
   /* money you put in is not performance - take it out before saying how it did */
   var hi = Math.min(ix, inv.length-1);
@@ -860,11 +888,6 @@ function paintHero(){
   el("heroDelta").innerHTML = '<span class="'+mTone+'">'+
     (mTone==="dim" ? "" : '<span class="arrow">'+(mTone==="pos"?"▲":"▼")+'</span> ')+
     mAbs+' ('+mPct+')</span>';
-  var addLine = el("heroAdd");
-  if (added > 1){
-    addLine.hidden = false;
-    addLine.innerHTML = '<span class="tkey"></span>' + signed(added) + " you added, marked below";
-  } else addLine.hidden = true;
 
   /* on 1D the hero already is today - do not print the same number twice */
   var oneDay = state.period === "1D";
@@ -874,7 +897,7 @@ function paintHero(){
   syncTodayCard();
   el("heroWhen").textContent = state.scrubIndex===null
     ? periodDef(state.period).label
-    : dateAt(ix, n);
+    : dateAt(ix, n) + (dep ? " · " + usd(dep.v, 2) + " added" : "");
 
   var cross = el("cross"), knob = el("knob"), box = el("chartBox");
   if (state.scrubIndex === null){ cross.classList.remove("on"); knob.classList.remove("on"); }
@@ -1114,10 +1137,9 @@ function renderBreakdown(){
   });
   if (bdSect("sector", sec.length > 0)){
     var shown = sec.length > SECTOR_TOP && !sectorsAll ? sec.slice(0, SECTOR_TOP) : sec;
-    var hasRE = sec.length > 1 && shown.some(function(b){ return b.key==="Real Estate"; });
     el("sectorBars").innerHTML = sec.length > 1 ? shown.map(function(b){
       return barRow(b.key, b.value, b.value/eqTotal);
-    }).join("") + (hasRE ? '<div class="bars-cap">Real estate here also counts the property companies inside your stock funds.</div>' : "")
+    }).join("")
       : allOfIt(sec[0].key);
     el("sectorMore").innerHTML = sec.length > SECTOR_TOP
       ? '<button class="more" data-sectors>'+(sectorsAll ? "Show fewer" : "Show all "+sec.length+" sectors")+'</button>' : "";
@@ -1185,8 +1207,7 @@ function renderSettings(){
     var n = HOLDINGS.filter(function(h){return h.acct===a.id;}).length;
     return '<button class="row" data-editacct="'+esc(a.id)+'">'+
       '<div class="row-main"><div class="row-t">'+esc(a.name)+'</div>'+
-      '<div class="row-s">'+esc(a.firm||"No institution")+' · '+n+' holding'+(n===1?"":"s")+
-        (a.off ? ' · not in the portfolio total' : '')+'</div></div>'+
+      '<div class="row-s">'+esc(a.firm||"No institution")+' · '+n+' holding'+(n===1?"":"s")+'</div></div>'+
       '<div class="row-r"><div class="row-v num">'+usd(v)+'</div></div><div class="chev"></div></button>';
   }).join("") || '<div class="empty">No accounts yet.</div>';
 
@@ -1202,8 +1223,7 @@ function renderSettings(){
           : "Open your browser menu and choose Install, or Add to Home Screen.";
 
   el("dataCard").innerHTML =
-    '<div class="row"><div class="row-main"><div class="row-t">Holdings stored</div>'+
-    '<div class="row-s">On this device only</div></div>'+
+    '<div class="row"><div class="row-main"><div class="row-t">Holdings stored</div></div>'+
     '<div class="row-r"><div class="row-v num">'+HOLDINGS.length+' holding'+(HOLDINGS.length===1?"":"s")+'</div></div></div>'+
     '<button class="row" data-reset="1"><div class="row-main">'+
     '<div class="row-t" style="color:var(--neg)">Reset to the example portfolio</div>'+
@@ -1941,6 +1961,8 @@ function applyTheme(){
 function renderAll(){
   seriesCache = {};
   renderChips(); renderPeriods(); renderPortfolio(); renderBreakdown(); renderSettings(); renderTabs();
+  /* the note is about the seed data: once anything is edited, it no longer applies */
+  el("exampleFoot").hidden = JSON.stringify([ACCOUNTS, HOLDINGS]) !== JSON.stringify([SEED_ACCOUNTS, SEED_HOLDINGS]);
 }
 
 /* ========================= events ========================= */
@@ -1983,6 +2005,12 @@ document.addEventListener("click", function(e){
    and every tap after that is swallowed. Check on touch and let it go. */
 function unstick(){
   if (el("sheet").classList.contains("on")) return;
+  /* touch nothing unless something is actually stuck: iOS drops the click of
+     a tap whose touchstart changed the page */
+  var b = document.body;
+  if (!el("scrim").classList.contains("on") && !el("ask").classList.contains("on") &&
+      !b.classList.contains("locked") && !el("sheet").style.transform &&
+      !el("app").hasAttribute("aria-hidden")) return;
   hideAsk();
   el("scrim").classList.remove("on");
   el("sheet").style.transform = "";
