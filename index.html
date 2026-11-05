@@ -24,6 +24,7 @@ html,body{margin:0;padding:0}
   --label:#000; --label-2:rgba(60,60,67,.78); --label-3:rgba(60,60,67,.56);
   --accent:#5856d6; --accent-fill:#5856d6; --pos:#1d7a34; --neg:#d70015;
   --chrome:rgba(248,248,250,.80);
+  --float-shadow:0 8px 24px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.08);
   /* categorical palette - one hue per asset class, nothing else. Green and red
      are reserved for gain and loss; --c-neutral fills every single-series bar. */
   --c-blue:#0085fe; --c-teal:#00afc7; --c-orange:#ff8c00; --c-purple:#b052d0;
@@ -52,6 +53,9 @@ html,body{margin:0;padding:0}
   --rail:16px; --dot:12px;
 
   --tabbar:52px;
+  /* The tab bar floats: this is its gap from the screen's bottom edge, or the
+     home indicator's inset where that is larger. */
+  --tabbar-lift:max(var(--s-4), env(safe-area-inset-bottom));
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
   color-scheme:light;
 }
@@ -61,7 +65,7 @@ html,body{margin:0;padding:0}
     --sep:rgba(84,84,88,.42); --sep-strong:rgba(84,84,88,.65);
     --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55);
     --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
-    --chrome:rgba(24,24,26,.76);
+    --chrome:rgba(24,24,26,.76); --float-shadow:0 8px 24px rgba(0,0,0,.55);
     --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
     --c-rose:#e55d8c; --c-gray:#b0b0b0; --c-neutral:#8e8e93;
     color-scheme:dark;
@@ -72,7 +76,7 @@ html,body{margin:0;padding:0}
   --sep:rgba(84,84,88,.42); --sep-strong:rgba(84,84,88,.65);
   --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55);
   --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
-  --chrome:rgba(24,24,26,.76);
+  --chrome:rgba(24,24,26,.76); --float-shadow:0 8px 24px rgba(0,0,0,.55);
   --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
   --c-rose:#e55d8c; --c-gray:#b0b0b0; --c-neutral:#8e8e93;
   color-scheme:dark;
@@ -99,7 +103,7 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 #app{max-width:520px;margin:0 auto;position:relative}
 .scroll{
   min-height:100dvh;
-  padding:0 0 calc(var(--tabbar) + env(safe-area-inset-bottom) + var(--s-8));
+  padding:0 0 calc(var(--tabbar) + var(--tabbar-lift) + var(--s-8));
   display:none;
 }
 .scroll.on{display:block}
@@ -286,14 +290,14 @@ textarea.box{
 
 /* ---------- tab bar ---------- */
 .tabbar{
-  position:fixed;left:0;right:0;bottom:0;z-index:60;max-width:520px;margin:0 auto;
+  position:fixed;left:var(--rail);right:var(--rail);bottom:var(--tabbar-lift);z-index:60;max-width:400px;margin:0 auto;
   background:var(--chrome);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
-  border-top:.5px solid var(--sep);
-  padding-bottom:env(safe-area-inset-bottom);
+  border:.5px solid var(--sep-strong);border-radius:var(--r-pill);box-shadow:var(--float-shadow);
+  padding:var(--s-2);
   display:grid;grid-template-columns:repeat(3,1fr);
 }
-.tab{height:var(--tabbar);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-1);color:var(--label-2)}
-.tab.on{color:var(--accent)}
+.tab{height:calc(var(--tabbar) - 2*var(--s-2));border-radius:var(--r-pill);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-1);color:var(--label-2)}
+.tab.on{color:var(--accent);background:var(--surface-3)}
 .tab svg{width:var(--s-8);height:var(--s-8);display:block}
 .tab span{font-size:var(--t-cap2);font-weight:500;letter-spacing:0}
 
@@ -304,7 +308,7 @@ textarea.box{
 [hidden]{display:none!important}
 .foot{font-size:var(--t-cap2);color:var(--label-2);text-align:center;padding:var(--s-7) var(--rail) var(--s-2);line-height:1.5}
 .toast{
-  position:fixed;left:50%;bottom:calc(var(--tabbar) + env(safe-area-inset-bottom) + var(--s-7));
+  position:fixed;left:50%;bottom:calc(var(--tabbar) + var(--tabbar-lift) + var(--s-5));
   transform:translate(-50%,var(--s-5));z-index:95;
   background:var(--label);color:var(--bg);font-size:var(--t-foot);font-weight:500;
   padding:var(--s-5) var(--s-7);border-radius:var(--r-pill);opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;
