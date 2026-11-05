@@ -521,7 +521,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 12</div>
+      <div class="foot">Build 13</div>
     </div>
   </section>
 
@@ -1122,7 +1122,8 @@ function renderBreakdown(){
   var byAcct = buckets(hs, function(h){ var o={}; o[h.acct]=val(h); return o; });
   if (bdSect("acct", byAcct.length > 1)){
     el("acctBars").innerHTML = byAcct.map(function(b){
-      return barRow(acctById(b.key).name + " · " + acctById(b.key).firm, b.value, b.value/total);
+      var a = acctById(b.key);
+      return barRow(a.name + (a.firm ? " · " + a.firm : ""), b.value, b.value/total);
     }).join("");
   }
 
@@ -1206,7 +1207,7 @@ function renderSettings(){
     var n = HOLDINGS.filter(function(h){return h.acct===a.id;}).length;
     return '<button class="row" data-editacct="'+esc(a.id)+'">'+
       '<div class="row-main"><div class="row-t">'+esc(a.name)+'</div>'+
-      '<div class="row-s">'+esc(a.firm||"No institution")+' · '+n+' holding'+(n===1?"":"s")+'</div></div>'+
+      '<div class="row-s">'+(a.firm ? esc(a.firm)+' · ' : '')+n+' holding'+(n===1?"":"s")+'</div></div>'+
       '<div class="row-r"><div class="row-v num">'+usd(v)+'</div></div><div class="chev"></div></button>';
   }).join("") || '<div class="empty">No accounts yet.</div>';
 
