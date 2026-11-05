@@ -1,4 +1,4 @@
-const CACHE = "basis-v9";
+const CACHE = "basis-v10";
 const SHELL = ["./", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -14,8 +14,12 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  /* the page itself always asks the server, past the browser's own cache:
+     GitHub Pages lets it sit there for ten minutes, long enough for an
+     installed Basis to keep running last week's code */
+  const net = req.mode === "navigate" ? fetch(req.url, { cache: "no-cache" }) : fetch(req);
   e.respondWith(
-    fetch(req)
+    net
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
