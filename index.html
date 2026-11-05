@@ -456,7 +456,6 @@ textarea.box{
       <section data-bd="sector">
         <div class="sect">Stocks by sector</div>
         <div class="card">
-          <div class="card-h"><div class="card-t">What’s inside your funds</div><div class="card-s" id="sectorNote"></div></div>
           <div class="bars" id="sectorBars"></div>
           <div id="sectorMore"></div>
         </div>
@@ -472,17 +471,15 @@ textarea.box{
         <div class="card"><div class="bars" id="cryptoBars"></div></div>
       </section>
 
-      <div class="sect" id="perfSect">Leaders &amp; laggards</div>
-      <div class="card">
-        <div class="card-h"><div class="card-t" id="bestTitle">Best</div><div class="card-s">Since you bought</div></div>
-        <div id="bestList"></div>
+      <div class="sect" id="perfSect">Leaders</div>
+      <div class="card"><div id="bestList"></div></div>
+      <div id="worstCard">
+        <div class="sect">Laggards</div>
+        <div class="card"><div id="worstList"></div></div>
       </div>
-      <div class="card" id="worstCard">
-        <div class="card-h"><div class="card-t">Worst</div><div class="card-s">Since you bought</div></div>
-        <div id="worstList"></div>
-      </div>
+      <div class="foot">Returns are since you bought each holding.</div>
 
-      <div class="foot" id="bdFoot">Fund sector and region weights are approximate published allocations.</div>
+      <div class="foot" id="bdFoot" style="padding-top:0">Fund sector and region weights are approximate published allocations.</div>
     </div>
   </section>
 
@@ -1114,7 +1111,6 @@ function renderBreakdown(){
     return o;
   });
   if (bdSect("sector", sec.length > 0)){
-    el("sectorNote").textContent = sec.length > 1 ? sec.length+" of "+SECTORS.length+" sectors" : "";
     var shown = sec.length > SECTOR_TOP && !sectorsAll ? sec.slice(0, SECTOR_TOP) : sec;
     var hasRE = sec.length > 1 && shown.some(function(b){ return b.key==="Real Estate"; });
     el("sectorBars").innerHTML = sec.length > 1 ? shown.map(function(b){
@@ -1168,14 +1164,12 @@ function renderBreakdown(){
      positions there is no top and bottom to speak of, so show one ranked list */
   var top = Math.min(5, Math.floor(perf.length/2));
   if (top >= 2){
-    el("perfSect").textContent = "Leaders & laggards";
-    el("bestTitle").textContent = "Best";
+    el("perfSect").textContent = "Leaders";
     el("worstCard").hidden = false;
     el("bestList").innerHTML  = perfRows(perf.slice(0, top));
     el("worstList").innerHTML = perfRows(perf.slice(-top).reverse());
   } else {
     el("perfSect").textContent = "Returns";
-    el("bestTitle").textContent = "By return";
     el("worstCard").hidden = true;
     el("worstList").innerHTML = "";
     el("bestList").innerHTML = perfRows(perf);
