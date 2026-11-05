@@ -45,8 +45,8 @@ html,body{margin:0;padding:0}
   --s-1:2px; --s-2:4px; --s-3:6px; --s-4:8px;
   --s-5:12px; --s-6:16px; --s-7:20px; --s-8:24px;
 
-  /* ---- radius. Five steps. ---- */
-  --r-xs:4px; --r-sm:8px; --r-md:12px; --r-card:14px; --r-pill:999px;
+  /* ---- radius. Six steps; cards and sheets are as round as iOS 26's. ---- */
+  --r-xs:4px; --r-sm:8px; --r-md:12px; --r-card:20px; --r-sheet:28px; --r-pill:999px;
 
   /* ---- the text rail. Everything inside a card starts at --rail. The only
      dot left is the asset-class legend, and it sits inside its own bar row. ---- */
@@ -70,6 +70,13 @@ html,body{margin:0;padding:0}
     --c-rose:#e55d8c; --c-gray:#b0b0b0; --c-neutral:#8e8e93;
     color-scheme:dark;
   }
+  :root:not([data-theme="light"]) .sheet{
+    background:#1c1c1e; --surface:#2c2c2e; --surface-2:#3a3a3c; --surface-3:#48484a;
+  }
+}
+:root[data-theme="dark"] .sheet{
+  /* a modal sits on the elevated palette, one step up from the page */
+  background:#1c1c1e; --surface:#2c2c2e; --surface-2:#3a3a3c; --surface-3:#48484a;
 }
 :root[data-theme="dark"]{
   --bg:#000; --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
@@ -88,7 +95,11 @@ body{
   -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
   overflow-x:hidden; overscroll-behavior-y:none;
   -webkit-tap-highlight-color:transparent;
+  /* an app's chrome is never selectable text */
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
 }
+input,textarea,select{-webkit-user-select:text;user-select:text}
+:focus:not(:focus-visible){outline:none}
 button{font:inherit;color:inherit;background:none;border:0;margin:0;padding:0;cursor:pointer;letter-spacing:inherit}
 input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
@@ -111,11 +122,14 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 
 .topbar{
   position:sticky;top:0;z-index:40;
-  background:var(--chrome);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
+  /* clear at the scroll edge, as iOS draws a large-title bar; the material
+     arrives only once content passes underneath */
+  background:transparent;
   padding-top:env(safe-area-inset-top);
-  border-bottom:.5px solid transparent;transition:border-color .2s;
+  border-bottom:.5px solid transparent;transition:background-color .2s,border-color .2s;
 }
-.topbar.stuck{border-bottom-color:var(--sep)}
+.topbar.stuck{border-bottom-color:var(--sep);background:var(--chrome);
+  backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px)}
 .topbar-in{height:44px;display:flex;align-items:center;gap:var(--s-5);position:relative}
 .topbar-title{position:absolute;left:50%;font-size:var(--t-body);font-weight:600;opacity:0;transform:translate(-50%,5px);transition:opacity .18s,transform .18s;pointer-events:none}
 .topbar.stuck .topbar-title{opacity:1;transform:translate(-50%,0)}
@@ -152,7 +166,17 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 .row-v{font-size:var(--t-sub);font-weight:500}
 .row-d{font-size:var(--t-cap);margin-top:var(--s-1)}
 .chev{width:var(--s-4);height:var(--s-4);border-right:2px solid var(--label-3);border-bottom:2px solid var(--label-3);transform:rotate(-45deg);flex-shrink:0;margin-left:var(--s-1)}
+/* press feedback, as iOS gives it: a cell lights at once and fades on release,
+   a capsule gives a little under the finger, a bar button dims */
+button.row,.more,.ask-g button{transition:background-color .3s}
+button.row:active,.more:active,.ask-g button:active{transition:none}
 button.row:active{background:var(--surface-2)}
+.chip,.tab,.btn{transition:transform .35s cubic-bezier(.3,1.5,.5,1),background-color .2s,color .2s}
+.chip:active,.tab:active,.btn:active{transform:scale(.96);transition-duration:.1s}
+.topbar-act,.sheet-x,.toast-u{transition:opacity .2s}
+.topbar-act:active,.sheet-x:active,.toast-u:active{opacity:.35;transition:none}
+.seg button{transition:background-color .2s,color .2s,opacity .2s}
+.seg button:active:not(.on){opacity:.6}
 
 .dot{width:var(--dot);height:var(--dot);border-radius:var(--r-xs);flex-shrink:0}
 .tick{font-family:var(--mono);font-size:var(--t-cap2);letter-spacing:0;color:var(--label-2)}
@@ -222,7 +246,7 @@ button.row:active{background:var(--surface-2)}
 .sheet{
   position:fixed;left:0;right:0;bottom:0;z-index:91;
   max-width:520px;margin:0 auto;
-  background:var(--bg);border-radius:var(--r-card) var(--r-card) 0 0;
+  background:var(--bg);border-radius:var(--r-sheet) var(--r-sheet) 0 0;
   transform:translateY(102%);transition:transform .32s cubic-bezier(.32,.72,0,1);
   max-height:92dvh;display:flex;flex-direction:column;
 }
@@ -234,7 +258,7 @@ button.row:active{background:var(--surface-2)}
 body.locked{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 /* the title stays centred between whatever sits either side of it: a form's
    Cancel on the left, its one action - or a plain sheet's Done - on the right */
-.sheet-h{display:grid;grid-template-columns:1fr minmax(0,max-content) 1fr;align-items:center;gap:var(--s-4);padding:var(--s-5) var(--rail) var(--s-4);flex-shrink:0}
+.sheet-h{display:grid;grid-template-columns:1fr minmax(0,max-content) 1fr;align-items:center;gap:var(--s-4);padding:var(--s-5) var(--rail) var(--s-4);flex-shrink:0;touch-action:none}
 .sheet-t{grid-column:2;font-size:var(--t-body);font-weight:600;text-align:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sheet-x{grid-column:3;justify-self:end;font-size:var(--t-sub);color:var(--accent);min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:flex-end}
 .sheet-x.lead{grid-column:1;justify-self:start;justify-content:flex-start}
@@ -368,8 +392,8 @@ textarea.box{
 
       <div class="card" id="todayCard">
         <div class="card-h"><div class="card-t" id="todayTitle">Today</div><div class="card-s" id="todayPct"></div></div>
-        <div class="card-pad" id="todayValue" style="padding-top:var(--s-4)">
-          <div class="hero-d" style="margin:0"><span id="todayAbs" class="num" style="font-size:var(--t-title);font-weight:600"></span><span class="hero-when">today so far</span></div>
+        <div class="card-pad" id="todayValue" style="padding-top:var(--s-4);padding-bottom:var(--s-2)">
+          <div class="hero-d" style="margin:0"><span id="todayAbs" class="num" style="font-size:var(--t-title);font-weight:600"></span></div>
         </div>
         <div id="todayMovers"></div>
       </div>
@@ -377,7 +401,6 @@ textarea.box{
       <div class="card">
         <div class="card-h"><div class="card-t">Total return</div><div class="card-s" id="returnPct"></div></div>
         <div class="card-pad" style="padding-top:var(--s-4);display:flex;gap:var(--s-8)">
-          <div><div class="row-s" style="margin:0 0 var(--s-2)">Value</div><div class="num" id="totalValue" style="font-size:var(--t-body);font-weight:600"></div></div>
           <div><div class="row-s" style="margin:0 0 var(--s-2)">Invested</div><div class="num" id="totalCost" style="font-size:var(--t-body);font-weight:600"></div></div>
           <div><div class="row-s" style="margin:0 0 var(--s-2)">Gain</div><div class="num" id="totalGain" style="font-size:var(--t-body);font-weight:600"></div></div>
         </div>
@@ -935,7 +958,6 @@ function renderPortfolio(){
   var tAbs = signed(dayAbs), tPct = pct(dayPct);
   el("todayAbs").innerHTML = '<span class="'+tone(tAbs)+'">'+tAbs+'</span>';
   el("todayPct").innerHTML = '<span class="'+tone(tPct)+'">'+tPct+'</span>';
-  el("totalValue").textContent = usd(total);
   el("totalCost").textContent = usd(cost);
   var gAbs = signed(gain), gPct = pct(gpct);
   el("totalGain").innerHTML = '<span class="'+tone(gAbs)+'">'+gAbs+'</span>';
@@ -1203,6 +1225,7 @@ function openSheet(title, html, after, form){
   /* the page behind a sheet must not scroll, or the sheet is only a picture
      of a modal - fixing the body keeps the scroll position to put back */
   if (!document.body.classList.contains("locked")){
+    syncTopbars();
     lockedY = window.scrollY;
     document.body.style.top = (-lockedY)+"px";
     document.body.classList.add("locked");
@@ -1270,18 +1293,26 @@ function keepEditing(){
 }
 /* the grabber is the universal "drag me down" signal - make it do that */
 (function(){
-  var grip = document.querySelector(".grip"), sheet = el("sheet");
+  /* and, as on iOS, so is the rest of the header - anywhere but its buttons */
+  var grip = document.querySelector(".grip"), head = document.querySelector(".sheet-h"), sheet = el("sheet");
   var y0 = null, dy = 0, t0 = 0;
-  grip.addEventListener("touchstart", function(e){
+  function start(e){
+    if (e.target.closest("button")) return;
     y0 = e.touches[0].clientY; dy = 0; t0 = Date.now();
     sheet.classList.add("drag");
-  }, {passive:true});
-  grip.addEventListener("touchmove", function(e){
+  }
+  function move(e){
     if (y0 === null) return;
     e.preventDefault();
     dy = Math.max(0, e.touches[0].clientY - y0);
     sheet.style.transform = "translateY("+dy+"px)";
-  }, {passive:false});
+  }
+  [grip, head].forEach(function(n){
+    n.addEventListener("touchstart", start, {passive:true});
+    n.addEventListener("touchmove", move, {passive:false});
+    n.addEventListener("touchend", end);
+    n.addEventListener("touchcancel", end);
+  });
   function end(){
     if (y0 === null) return;
     var flick = dy > 40 && (Date.now()-t0) < 260;
@@ -1291,14 +1322,12 @@ function keepEditing(){
     /* a form holding edits springs back and asks instead */
     if (dy > 120 || flick) leaveSheet();
   }
-  grip.addEventListener("touchend", end);
-  grip.addEventListener("touchcancel", end);
 })();
 function toast(msg, undo){
   var t = el("toast");
   clearTimeout(toast._t);
   if (undo){
-    t.innerHTML = '<span>'+esc(msg)+'</span><button class="toast-u" id="toastUndo">Undo</button>';
+    t.innerHTML = '<span>'+esc(msg)+'</span><button class="toast-u tap44" id="toastUndo">Undo</button>';
     t.classList.add("act");
     el("toastUndo").addEventListener("click", function(){
       clearTimeout(toast._t); t.classList.remove("on","act"); undo();
@@ -1340,10 +1369,13 @@ function formError(msg){
   var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   el("sheetBody").scrollTo({top:0, behavior: calm ? "auto" : "smooth"});
 }
-function fieldText(id,label,ph,value,type){
+/* caps: how the keyboard capitalises - "characters" for a ticker, "words" for
+   a name. Nothing here is prose, so nothing autocorrects. */
+function fieldText(id,label,ph,value,type,caps){
   return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label>'+
     '<input id="'+id+'" type="'+(type||"text")+'" placeholder="'+esc(ph)+'" value="'+esc(value===undefined?"":value)+'"'+
-    (type==="number"?' inputmode="decimal"':'')+'></div>';
+    (type==="number"?' inputmode="decimal"':'')+
+    ' autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="'+(caps||"off")+'"></div>';
 }
 function fieldSelect(id,label,opts,sel){
   return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label><select id="'+id+'">'+
@@ -1371,8 +1403,8 @@ function sheetAccount(editId){
   var a = editId ? acctById(editId) : {name:"",firm:""};
   var html = '<div class="err" id="fErr" role="alert"></div>'+
     '<div class="card" style="margin-top:var(--s-2)">'+
-    fieldText("fName","Name","Brokerage", a.name)+
-    fieldText("fFirm","Institution","Fidelity", a.firm)+
+    fieldText("fName","Name","Brokerage", a.name, "text", "words")+
+    fieldText("fFirm","Institution","Fidelity", a.firm, "text", "words")+
     '</div>'+
     (editId ? '<button class="btn warn" id="fDel">Delete account</button>' : '')+
     (editId ? '<div class="note">Deleting an account also removes its holdings.</div>' : '');
@@ -1424,8 +1456,8 @@ function sheetHolding(preset, edit){
     '<div class="card" style="margin-top:var(--s-2)">'+
     fieldSelect("fAcct","Account", acctOpts, edit ? edit.acct : preset ? offAcct : (state.acct!=="all"?state.acct:ACCOUNTS[0].id))+
     fieldSelect("fCls","Type", CLASS_OPTS, edit ? edit.cls : preset || "us_stock")+
-    fieldText("fTick","Symbol","VTI", edit && !OFF[edit.cls] ? edit.tick : "")+
-    fieldText("fName2","Name","Vanguard Total Stock Market", edit ? edit.name : "")+
+    fieldText("fTick","Symbol","VTI", edit && !OFF[edit.cls] ? edit.tick : "", "text", "characters")+
+    fieldText("fName2","Name","Vanguard Total Stock Market", edit ? edit.name : "", "text", "words")+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     fieldText("fSh","Shares","100", edit && !OFF[edit.cls] ? String(edit.shares) : "","number")+
     fieldText("fPx","Price now","312.44", edit ? String(abs(edit.price)) : "","number")+
@@ -1884,7 +1916,8 @@ function setTab(k){
   /* tapping the tab you are already on is the iOS scroll-to-top gesture */
   if (k === state.tab){
     tabScroll[k] = 0;
-    window.scrollTo({top:0, behavior:"smooth"});
+    var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({top:0, behavior: calm ? "auto" : "smooth"});
     setTimeout(function(){ if (window.scrollY > 0) window.scrollTo(0,0); }, 400);
     return;
   }
@@ -1894,6 +1927,7 @@ function setTab(k){
   renderTabs();
   if (k==="portfolio") paintHero();
   window.scrollTo(0, tabScroll[k] || 0);
+  syncTopbars();
 }
 function renderPeriods(){
   el("periodSeg").innerHTML = PERIODS.map(function(p){
@@ -1978,11 +2012,14 @@ document.addEventListener("keydown", function(e){
   else if (el("sheet").classList.contains("on")) leaveSheet();
 });
 
-/* sticky header shadow */
-window.addEventListener("scroll", function(){
+/* the bar takes its material once content passes under it. While a sheet
+   holds the body fixed, scrollY reads 0 but the page has not moved: leave it. */
+function syncTopbars(){
+  if (document.body.classList.contains("locked")) return;
   var stuck = window.scrollY > 46;
   [].forEach.call(document.querySelectorAll("[data-topbar]"), function(b){ b.classList.toggle("stuck", stuck); });
-}, {passive:true});
+}
+window.addEventListener("scroll", syncTopbars, {passive:true});
 
 /* ========================= pull to refresh ========================= */
 (function(){
