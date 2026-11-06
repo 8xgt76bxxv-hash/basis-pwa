@@ -524,7 +524,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 16</div>
+      <div class="foot">Build 17</div>
     </div>
   </section>
 
@@ -1555,7 +1555,8 @@ function sheetHolding(preset, edit, acct){
       el("wrap-fCat").style.display = (c==="crypto") ? "" : "none";
       el("wrap-fTick").style.display = off ? "none" : "";
       el("wrap-fSh").style.display   = off ? "none" : "";
-      el("wrap-fY").style.display    = off ? "none" : "";
+      /* most coins pay nothing, so crypto asks only for what it has */
+      el("wrap-fY").style.display    = off || c==="crypto" ? "none" : "";
       el("wrap-fBought").style.display = off ? "none" : "";
       relabel("fName2", off ? "What is it" : "Name");
       relabel("fPx", off ? (c==="loan" ? "Balance owed" : "Worth today") : "Price now");
