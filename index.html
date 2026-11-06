@@ -318,6 +318,13 @@ textarea.box{
    scrolls back up to it: Save can be tapped a long way further down. */
 .err{font-size:var(--t-foot);color:var(--neg);line-height:1.4;margin:var(--s-2) var(--s-1) var(--s-5)}
 .err:empty{margin:0}
+.field input.sw{flex:0 0 51px;width:51px;height:31px;min-height:0;margin:auto 0;border-radius:var(--r-pill);
+  background:var(--sep-strong);position:relative;cursor:pointer;transition:background-color .2s}
+.field input.sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.18);transition:transform .2s}
+.field input.sw:checked{background:var(--accent-fill)}
+.field input.sw:checked::after{transform:translateX(20px)}
+.field .sw-gap{flex:1}
 .vs{font-size:var(--t-cap);color:var(--label-2);line-height:1.4;margin:var(--s-3) var(--s-1) 0}
 .vs.bad{color:var(--neg)}
 textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
@@ -528,7 +535,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 19</div>
+      <div class="foot">Build 20</div>
     </div>
   </section>
 
@@ -1418,6 +1425,10 @@ function fieldText(id,label,ph,value,type,caps){
     (type==="number"?' inputmode="decimal"':'')+
     ' autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="'+(caps||"off")+'"></div>';
 }
+function fieldSwitch(id,label,on){
+  return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label><span class="sw-gap"></span>'+
+    '<input id="'+id+'" type="checkbox" role="switch" class="sw"'+(on?" checked":"")+'></div>';
+}
 function fieldSelect(id,label,opts,sel){
   return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label><select id="'+id+'">'+
     opts.map(function(o){ return '<option value="'+esc(o[0])+'"'+(o[0]===sel?" selected":"")+'>'+esc(o[1])+'</option>'; }).join("")+
@@ -1497,7 +1508,8 @@ function sheetHolding(preset, edit, acct){
   if (spread) secOpts.unshift(["__keep","Fund, many sectors"]);
   var catOpts = CRYPTO_CATS.concat(["Other crypto"]).map(function(s){ return [s,s]; });
   var html = '<div class="err" id="fErr" role="alert"></div>'+
-    '<div class="card" style="margin-top:var(--s-2)">'+
+    (edit || preset ? '' : '<button class="btn ghost" id="fSayIt" style="margin-top:var(--s-2)">Say it instead</button>')+
+    '<div class="card" style="margin-top:var(--s-'+(edit || preset ? 2 : 5)+')">'+
     fieldSelect("fAcct","Account", acctOpts, edit ? edit.acct : acct || (preset ? offAcct : defaultAcct()))+
     fieldSelect("fCls","Type", CLASS_OPTS, edit ? edit.cls : preset || "us_stock")+
     fieldText("fTick","Symbol","VTI", edit && !OFF[edit.cls] ? edit.tick : "", "text", "characters")+
@@ -1561,6 +1573,7 @@ function sheetHolding(preset, edit, acct){
   openSheet(edit ? "Edit "+(OFF[edit.cls] ? edit.name : edit.tick) :
             preset ? "Something you own" : "New holding", html, function(){
     function relabel(id,txt){ var l = document.querySelector('label[for="'+id+'"]'); if(l) l.textContent = txt; }
+    if (el("fSayIt")) el("fSayIt").addEventListener("click", function(){ sheetSay("", el("fAcct").value); });
     function sync(){
       var c = el("fCls").value, off = !!OFF[c];
       el("wrap-fSec").style.display = (c==="us_stock"||c==="intl_stock"||c==="real_estate") ? "" : "none";
@@ -2126,7 +2139,8 @@ function parseSaid(text){
   rows.forEach(function(r){
     if (r.acct) return;
     var held = HOLDINGS.filter(function(h){ return h.tick === r.tick; }).map(function(h){ return h.acct; });
-    r.acct = held.length === 1 ? held[0] : held.indexOf(defaultAcct()) >= 0 || !held.length ? defaultAcct() : held[0];
+    var def = sayAcct || defaultAcct();
+    r.acct = sayAcct ? sayAcct : held.length === 1 ? held[0] : held.indexOf(def) >= 0 || !held.length ? def : held[0];
   });
   return rows;
 }
@@ -2142,6 +2156,7 @@ function sayOutcome(c){
     if (c.shares > cur.shares + 1e-9) return {ok:false, msg:"This account holds " + shrTxt(cur.shares) + "."};
     msg = c.shares >= cur.shares - 1e-9 ? "Sells all " + shrTxt(cur.shares) + " shares"
                                        : shrTxt(cur.shares) + " → " + shrTxt(cur.shares - c.shares) + " shares";
+    if (c.cash) msg += " · " + usd(c.shares * px, 2) + " to cash";
   } else {
     if (!(px > 0)) return {ok:false, msg:"Enter the price paid."};
     var to = c.act === "set" ? c.shares : (cur ? cur.shares : 0) + c.shares;
@@ -2158,6 +2173,13 @@ function sayOutcome(c){
 function sayApply(c){
   var cur = findHolding(c.acct, c.tick);
   if (c.act === "sell"){
+    if (c.cash){
+      /* the money stays in the account it was sold in, as that account's cash */
+      var got = c.shares * (c.price > 0 ? c.price : cur.price);
+      var cash = HOLDINGS.filter(function(h){ return h.acct === c.acct && h.cls === "cash"; })[0];
+      if (cash) cash.shares += got / (cash.price || 1);
+      else HOLDINGS.push(h(c.acct, "CASH", "Cash", "cash", got, 1, 1, 0, 0));
+    }
     cur.shares -= c.shares;
     if (cur.shares < 1e-9) HOLDINGS.splice(HOLDINGS.indexOf(cur), 1);
     return;
@@ -2185,8 +2207,11 @@ function sayApply(c){
   HOLDINGS.push(rec);
 }
 
-function sheetSay(preset){
+/* opened from an account's own form, that account stands in for the default */
+var sayAcct = null;
+function sheetSay(preset, acct){
   if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
+  sayAcct = ACCOUNTS.some(function(a){ return a.id === acct; }) ? acct : null;
   openSheet("Say what changed",
     '<textarea class="box say" id="fSay" spellcheck="false" autocapitalize="sentences" ' +
     'placeholder="Tap the microphone on the keyboard, then say something like: Bought 5 VTI in Fidelity brokerage at $312. Sold 1 Uniswap.">' +
@@ -2209,17 +2234,22 @@ function sheetSayCheck(rows, text){
       fieldText("vN"+i, "Shares", "1", r.shares > 0 ? String(r.shares) : "", "number") +
       fieldSelect("vC"+i, "Account", acctOptions(), r.acct) +
       fieldText("vP"+i, "Price each", "", r.price > 0 ? String(+r.price.toFixed(4)) : "", "number") +
+      fieldSwitch("vK"+i, "Add to cash", false) +
       '</div><div class="vs" id="vS'+i+'"></div>';
   }).join("") + '<button class="btn ghost" id="vBack" style="margin-top:var(--s-7)">Back</button>';
   function read(i){
     return {act:el("vA"+i).value, tick:el("vT"+i).value.trim().toUpperCase(),
-      shares:parseFloat(el("vN"+i).value), acct:el("vC"+i).value, price:parseFloat(el("vP"+i).value)};
+      shares:parseFloat(el("vN"+i).value), acct:el("vC"+i).value, price:parseFloat(el("vP"+i).value),
+      cash:el("vK"+i).checked};
   }
   function sync(i){
     var c = read(i), cur = findHolding(c.acct, c.tick), o = sayOutcome(c);
     /* a sale leaves the cost per share of what remains as it was, so its
-       price changes nothing here */
-    el("wrap-vP"+i).style.display = c.act === "sell" || c.act === "skip" ? "none" : "";
+       price only matters when the money goes to cash */
+    var sell = c.act === "sell";
+    el("wrap-vP"+i).style.display = c.act === "skip" || (sell && !c.cash) ? "none" : "";
+    el("wrap-vK"+i).style.display = sell ? "" : "none";
+    document.querySelector('label[for="vP'+i+'"]').textContent = sell ? "Sold at" : "Price each";
     el("vP"+i).placeholder = cur ? cur.price.toFixed(2) : "";
     ["wrap-vT","wrap-vN","wrap-vC"].forEach(function(w){ el(w+i).style.display = c.act === "skip" ? "none" : ""; });
     el("vS"+i).textContent = o.msg;
@@ -2228,12 +2258,12 @@ function sheetSayCheck(rows, text){
   }
   openSheet(rows.length === 1 ? "Check 1 change" : "Check " + rows.length + " changes", html, function(){
     rows.forEach(function(r, i){
-      ["vA","vT","vN","vC","vP"].forEach(function(f){
-        el(f+i).addEventListener(f === "vA" || f === "vC" ? "change" : "input", function(){ sync(i); });
+      ["vA","vT","vN","vC","vP","vK"].forEach(function(f){
+        el(f+i).addEventListener(f === "vP" || f === "vT" || f === "vN" ? "input" : "change", function(){ sync(i); });
       });
       sync(i);
     });
-    el("vBack").addEventListener("click", function(){ sheetSay(text); });
+    el("vBack").addEventListener("click", function(){ sheetSay(text, sayAcct); });
   }, {label:"Save", dirty:function(){ return true; }, save:function(){
     var bad = -1, all = rows.map(function(r, i){ var o = sync(i); if (!o.ok && bad < 0) bad = i; return read(i); });
     if (bad >= 0){ formError((rows.length > 1 ? "Change " + (bad+1) + ": " : "") + el("vS"+bad).textContent); return; }
