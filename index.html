@@ -103,6 +103,8 @@ body{
 }
 input,textarea,select{-webkit-user-select:text;user-select:text}
 :focus:not(:focus-visible){outline:none}
+/* the dialogs take focus themselves when they open, never a ring */
+#sheet:focus,#ask:focus{outline:none}
 button{font:inherit;color:inherit;background:none;border:0;margin:0;padding:0;cursor:pointer;letter-spacing:inherit}
 input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
@@ -521,7 +523,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 14</div>
+      <div class="foot">Build 15</div>
     </div>
   </section>
 
@@ -530,12 +532,12 @@ textarea.box{
 </div>
 
 <div class="scrim" id="scrim"></div>
-<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+<div class="sheet" id="sheet" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <div class="grip" role="button" tabindex="0" aria-label="Close"></div>
   <div class="sheet-h"><button class="sheet-x lead" id="sheetCancel" hidden>Cancel</button><div class="sheet-t" id="sheetTitle"></div><button class="sheet-x" id="sheetClose">Done</button></div>
   <div class="sheet-b" id="sheetBody"></div>
 </div>
-<div class="ask" id="ask" role="alertdialog" aria-modal="true" aria-label="Discard changes?">
+<div class="ask" id="ask" tabindex="-1" role="alertdialog" aria-modal="true" aria-label="Discard changes?">
   <div class="ask-g"><button class="ask-yes" id="askYes">Discard changes</button></div>
   <div class="ask-g"><button class="ask-no" id="askNo">Keep editing</button></div>
 </div>
@@ -1272,10 +1274,11 @@ function openSheet(title, html, after, form){
     var opened = fieldValues();
     form.dirty = function(){ return fieldValues() !== opened; };
   }
-  /* put the reader inside the dialog, not behind it. Never a text field -
-     on iOS that raises the keyboard, and the viewport it leaves behind makes
-     every later tap land somewhere else. */
-  try { el(form ? "sheetCancel" : "sheetClose").focus({preventScroll:true}); } catch(err){}
+  /* put the reader inside the dialog, not behind it. The dialog itself, not
+     a button in it - Safari rings a button focused this way - and never a
+     text field, which on iOS raises the keyboard and leaves a viewport that
+     makes every later tap land somewhere else. */
+  try { el("sheet").focus({preventScroll:true}); } catch(err){}
 }
 /* every value the open form holds, to tell whether leaving would lose any */
 function fieldValues(){
@@ -1307,7 +1310,7 @@ function askDiscard(){
   try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(err){}
   el("sheet").setAttribute("aria-hidden","true");
   el("ask").classList.add("on");
-  try { el("askNo").focus({preventScroll:true}); } catch(err){}
+  try { el("ask").focus({preventScroll:true}); } catch(err){}
 }
 function hideAsk(){
   el("ask").classList.remove("on");
@@ -1315,7 +1318,7 @@ function hideAsk(){
 }
 function keepEditing(){
   hideAsk();
-  try { el("sheetCancel").focus({preventScroll:true}); } catch(err){}
+  try { el("sheet").focus({preventScroll:true}); } catch(err){}
 }
 /* the grabber is the universal "drag me down" signal - make it do that */
 (function(){
@@ -1434,8 +1437,7 @@ function sheetAccount(editId){
     fieldText("fFirm","Institution","Fidelity", a.firm, "text", "words")+
     '</div>'+
     (editId ? '<button class="btn ghost" id="fAddHold">Add a holding</button>' : '')+
-    (editId ? '<button class="btn warn" id="fDel">Delete account</button>' : '')+
-    (editId ? '<div class="note">Deleting an account also removes its holdings.</div>' : '');
+    (editId ? '<button class="btn warn" id="fDel">Delete account</button>' : '');
   function commit(){
     var name = el("fName").value.trim();
     if(!name){ formError("Give the account a name."); return; }
@@ -1496,8 +1498,7 @@ function sheetHolding(preset, edit, acct){
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     fieldSelect("fSec","Sector", secOpts, spread ? "__keep" : edit && edit.mix ? Object.keys(edit.mix)[0] : "")+
     fieldSelect("fCat","Crypto category", catOpts, edit && edit.cat ? edit.cat : "Store of Value")+
-    '</div>'+
-    '<div class="note">Cost per share is what you paid. Leave it blank and it uses the price you entered. The date you bought it is optional - it places the holding on the chart.</div>';
+    '</div>';
   function commit(){
     var tick = el("fTick").value.trim().toUpperCase();
     var sh = parseFloat(el("fSh").value), px = parseFloat(el("fPx").value);
@@ -1805,10 +1806,8 @@ function sheetReview(rows, skipped, acct, back){
   }
 
   openSheet("Review",
-    '<div class="note" style="margin:var(--s-2) var(--s-1) 0">Into ' +
-      esc(a.name) + (a.firm ? " · " + esc(a.firm) : "") + '. Nothing is saved until you confirm.' +
-      (skipped ? " " + skipped + (skipped === 1 ? " line was" : " lines were") + " not readable." : "") +
-    '</div>' +
+    (skipped ? '<div class="note" style="margin:var(--s-2) var(--s-1) 0">' + skipped +
+      (skipped === 1 ? " line was" : " lines were") + ' not readable.</div>' : '') +
     '<div class="sect">' + plan.length + (plan.length === 1 ? " holding" : " holdings") + '</div>' +
     '<div class="card" id="rvList">' + rowsHtml() + '</div>' +
     '<button class="btn" id="rvGo" style="margin-top:var(--s-7)">' + label() + '</button>' +
@@ -1882,9 +1881,7 @@ function sheetScan(preset){
   if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
   var file = null, busy = false;
   openSheet("Scan a statement",
-    '<div class="note" style="margin:var(--s-2) var(--s-1) 0">A screenshot of a holdings page reads best. ' +
-    'Check what comes back before anything is saved.</div>' +
-    '<div class="card" style="margin-top:var(--s-6)">' +
+    '<div class="card" style="margin-top:var(--s-2)">' +
       fieldSelect("fAcct", "Into account", acctOptions(), (preset && preset.acct) || defaultAcct()) + '</div>' +
     '<input id="fPhoto" type="file" accept="image/*" style="display:none">' +
     '<button class="btn ghost" id="fPick" style="margin-top:var(--s-6)">Choose a screenshot or photo</button>' +
