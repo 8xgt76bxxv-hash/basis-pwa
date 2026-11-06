@@ -521,7 +521,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 13</div>
+      <div class="foot">Build 14</div>
     </div>
   </section>
 
@@ -931,7 +931,9 @@ function paintHero(){
   else {
     var p = chartPts[ix], w = box.clientWidth, hgt = box.clientHeight;
     var px = p.x/1000*w, py = p.y/300*hgt;
-    cross.style.left = px+"px"; knob.style.left = px+"px"; knob.style.top = py+"px";
+    /* the line hangs from the dot, so at a peak nothing pokes out above it */
+    cross.style.left = px+"px"; cross.style.top = py+"px";
+    knob.style.left = px+"px"; knob.style.top = py+"px";
     cross.classList.add("on"); knob.classList.add("on");
   }
 }
@@ -1053,7 +1055,9 @@ function renderPortfolio(){
       '<div class="row-s">'+esc(sub)+'</div></div>'+
       '<div class="row-r"><div class="row-v num">'+money(val(h))+'</div>'+
       '<div class="row-d num '+tone(gTxt)+'">'+gTxt+'</div></div><div class="chev"></div></button>';
-  }).join("") : '<div class="empty">Nothing in this account yet.<br>Tap Add to put something in it.</div>';
+  }).join("") : '<div class="empty">Nothing in this account yet.</div>';
+  /* the form picks up whichever account chip is on */
+  el("holdingsList").innerHTML += '<button class="row" data-sheet="holding"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add a holding</div></div><div class="chev"></div></button>';
   el("holdingsList").dataset.scope = state.acct;
 
   el("updatedAt").textContent = "Updated " + state.updated.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
@@ -1429,6 +1433,7 @@ function sheetAccount(editId){
     fieldText("fName","Name","Brokerage", a.name, "text", "words")+
     fieldText("fFirm","Institution","Fidelity", a.firm, "text", "words")+
     '</div>'+
+    (editId ? '<button class="btn ghost" id="fAddHold">Add a holding</button>' : '')+
     (editId ? '<button class="btn warn" id="fDel">Delete account</button>' : '')+
     (editId ? '<div class="note">Deleting an account also removes its holdings.</div>' : '');
   function commit(){
@@ -1443,6 +1448,7 @@ function sheetAccount(editId){
     save(); renderAll(); closeSheet(); toast(editId ? "Account saved" : "Account added");
   }
   openSheet(editId ? "Edit account" : "New account", html, function(){
+    if (editId) el("fAddHold").addEventListener("click", function(){ sheetHolding(null, null, editId); });
     if (editId) el("fDel").addEventListener("click", function(){
       /* one tap takes the account and its holdings, so the toast puts both back */
       var accounts = ACCOUNTS, holdings = HOLDINGS;
@@ -1464,7 +1470,7 @@ var CLASS_OPTS = [["us_stock","US stock or fund"],["intl_stock","International s
   ["property","Property (home, land)"],["vehicle","Vehicle"],["collectible","Collectible"],
   ["other","Other asset"],["loan","Loan or mortgage"]];
 
-function sheetHolding(preset, edit){
+function sheetHolding(preset, edit, acct){
   if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
   /* a fund spreads over many sectors or regions. The form only offers one of
      each, so editing anything else about such a holding must leave them be. */
@@ -1477,7 +1483,7 @@ function sheetHolding(preset, edit){
   var catOpts = CRYPTO_CATS.concat(["Other crypto"]).map(function(s){ return [s,s]; });
   var html = '<div class="err" id="fErr" role="alert"></div>'+
     '<div class="card" style="margin-top:var(--s-2)">'+
-    fieldSelect("fAcct","Account", acctOpts, edit ? edit.acct : preset ? offAcct : (state.acct!=="all"?state.acct:ACCOUNTS[0].id))+
+    fieldSelect("fAcct","Account", acctOpts, edit ? edit.acct : acct || (preset ? offAcct : defaultAcct()))+
     fieldSelect("fCls","Type", CLASS_OPTS, edit ? edit.cls : preset || "us_stock")+
     fieldText("fTick","Symbol","VTI", edit && !OFF[edit.cls] ? edit.tick : "", "text", "characters")+
     fieldText("fName2","Name","Vanguard Total Stock Market", edit ? edit.name : "", "text", "words")+
