@@ -269,6 +269,7 @@ body.locked{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 .sheet-x{grid-column:3;justify-self:end;font-size:var(--t-sub);color:var(--accent);min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:flex-end}
 .sheet-x.lead{grid-column:1;justify-self:start;justify-content:flex-start}
 .sheet-x.go{font-weight:600}
+.sheet-x:disabled{color:var(--label-3)}
 .sheet-b{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 var(--rail) calc(env(safe-area-inset-bottom) + var(--s-7))}
 /* the discard prompt: an iOS action sheet over the sheet it guards. A tap
    anywhere but Discard keeps the edits. */
@@ -535,7 +536,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 21</div>
+      <div class="foot">Build 22</div>
     </div>
   </section>
 
@@ -1288,6 +1289,11 @@ function openSheet(title, html, after, form){
   el("sheet").classList.add("on");
   el("sheet").style.transform = "";
   if (after) after();
+  /* iOS dims a form's Add until what it needs is filled in, rather than
+     answering a tap with an error */
+  var gate = function(){ el("sheetClose").disabled = !!(form && form.ready && !form.ready()); };
+  el("sheetBody").oninput = el("sheetBody").onchange = gate;
+  gate();
   if (form && !form.dirty){
     var opened = fieldValues();
     form.dirty = function(){ return fieldValues() !== opened; };
@@ -1591,7 +1597,11 @@ function sheetHolding(preset, edit, acct){
       el("fCb").placeholder = off ? "148000" : "214.80";
     }
     el("fCls").addEventListener("change", sync); sync();
-  }, {label: edit ? "Save" : "Add", save: commit});
+  }, {label: edit ? "Save" : "Add", save: commit, ready: function(){
+    var px = Math.abs(parseFloat(el("fPx").value)) > 0;
+    if (OFF[el("fCls").value]) return el("fName2").value.trim() !== "" && px;
+    return el("fTick").value.trim() !== "" && parseFloat(el("fSh").value) > 0 && px;
+  }});
 }
 
 function sheetOffDetail(h){
