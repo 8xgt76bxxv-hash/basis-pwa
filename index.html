@@ -318,6 +318,9 @@ textarea.box{
    scrolls back up to it: Save can be tapped a long way further down. */
 .err{font-size:var(--t-foot);color:var(--neg);line-height:1.4;margin:var(--s-2) var(--s-1) var(--s-5)}
 .err:empty{margin:0}
+.vs{font-size:var(--t-cap);color:var(--label-2);line-height:1.4;margin:var(--s-3) var(--s-1) 0}
+.vs.bad{color:var(--neg)}
+textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
 
 /* ---------- tab bar ---------- */
 .tabbar{
@@ -504,6 +507,7 @@ textarea.box{
       <div class="card">
         <button class="row" data-sheet="account"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add an account</div></div><div class="chev"></div></button>
       </div>
+      <div class="card" id="defAcctCard"></div>
 
       <div class="sect">Appearance</div>
       <div class="card"><div class="card-pad" style="padding-top:var(--s-5)"><div class="seg" id="themeSeg" style="margin-top:0"></div></div></div>
@@ -524,7 +528,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 18</div>
+      <div class="foot">Build 19</div>
     </div>
   </section>
 
@@ -705,10 +709,11 @@ function load(){
     if (d && Array.isArray(d.accounts)) ACCOUNTS = d.accounts;
     if (d && d.holdings) HOLDINGS = d.holdings;
     if (d && d.theme) state.theme = d.theme;
+    if (d && d.defAcct) state.defAcct = d.defAcct;
   } catch(e){}
 }
 function save(){
-  try { localStorage.setItem(KEY, JSON.stringify({accounts:ACCOUNTS, holdings:HOLDINGS, theme:state.theme})); }
+  try { localStorage.setItem(KEY, JSON.stringify({accounts:ACCOUNTS, holdings:HOLDINGS, theme:state.theme, defAcct:state.defAcct})); }
   catch(e){}
 }
 function acctById(id){ for(var i=0;i<ACCOUNTS.length;i++) if(ACCOUNTS[i].id===id) return ACCOUNTS[i];
@@ -1218,6 +1223,11 @@ function renderSettings(){
       '<div class="row-r"><div class="row-v num">'+usd(v)+'</div></div><div class="chev"></div></button>';
   }).join("") || '<div class="empty">No accounts yet.</div>';
 
+  el("defAcctCard").hidden = !ACCOUNTS.length;
+  el("defAcctCard").innerHTML = ACCOUNTS.length ?
+    fieldSelect("setDefAcct", "Default account", acctOptions(), ACCOUNTS.some(function(a){ return a.id === state.defAcct; }) ? state.defAcct : ACCOUNTS[0].id) : "";
+  if (ACCOUNTS.length) el("setDefAcct").addEventListener("change", function(){ state.defAcct = this.value; save(); });
+
   el("themeSeg").innerHTML = [["system","System"],["light","Light"],["dark","Dark"]].map(function(t){
     return '<button data-settheme="'+t[0]+'"'+(state.theme===t[0]?' class="on"':'')+'>'+t[1]+'</button>';
   }).join("");
@@ -1418,6 +1428,8 @@ function sheetAddMenu(){
   openSheet("Add", '<div class="card" style="margin-top:var(--s-2)">'+
     '<button class="row" data-sheet="holding"><div class="row-main"><div class="row-t">A holding</div>'+
     '<div class="row-s">One symbol, shares and cost</div></div><div class="chev"></div></button>'+
+    '<button class="row" data-sheet="say"><div class="row-main"><div class="row-t">Say what changed</div>'+
+    '<div class="row-s">Buys and sells, spoken or typed</div></div><div class="chev"></div></button>'+
     '<button class="row" data-sheet="account"><div class="row-main"><div class="row-t">An account</div>'+
     '<div class="row-s">Another brokerage, IRA, wallet or bank</div></div><div class="chev"></div></button>'+
     '<button class="row" data-sheet="import"><div class="row-main"><div class="row-t">A list of holdings</div>'+
@@ -1840,7 +1852,12 @@ function sheetReview(rows, skipped, acct, back){
 function acctOptions(){
   return ACCOUNTS.map(function(a){ return [a.id, a.name + (a.firm ? " · " + a.firm : "")]; });
 }
-function defaultAcct(){ return state.acct !== "all" ? state.acct : ACCOUNTS[0].id; }
+/* the account a holding goes to when nothing says which: the one on screen,
+   else the one chosen in Settings, else the first */
+function defaultAcct(){
+  if (state.acct !== "all") return state.acct;
+  return ACCOUNTS.some(function(a){ return a.id === state.defAcct; }) ? state.defAcct : ACCOUNTS[0].id;
+}
 /* a list typed or pasted in, which closing the sheet would lose */
 function pasted(){ return el("fPaste").value.trim() !== ""; }
 
@@ -1944,6 +1961,290 @@ function sheetScan(preset){
         sheetScan({acct:acct, text:text});
       });
     }});
+}
+
+/* ========================= said aloud =========================
+   The keyboard's own dictation turns speech into text on the phone; this reads
+   the text. Each sentence becomes one change - a buy, a sale or a new total -
+   and every change is laid out as fields to check before anything is written.
+   No model and nothing sent anywhere: a few rules and the holdings you already
+   have are enough to read "sold 1 Uniswap from Coinbase". */
+
+/* symbols you may not hold yet, so a new one arrives with a name and a type.
+   The last column is what a person says instead of the symbol. */
+var KNOWN = [
+  ["UNH","UnitedHealth","us_stock","united unitedhealth"],["MSFT","Microsoft","us_stock",""],
+  ["GOOGL","Alphabet","us_stock","google alphabet"],["AMZN","Amazon","us_stock",""],
+  ["META","Meta Platforms","us_stock","facebook"],["TSLA","Tesla","us_stock",""],
+  ["BRK.B","Berkshire Hathaway","us_stock","berkshire"],["JPM","JPMorgan Chase","us_stock","jpmorgan"],
+  ["V","Visa","us_stock","visa"],["MA","Mastercard","us_stock","mastercard"],
+  ["JNJ","Johnson & Johnson","us_stock","johnson"],["PG","Procter & Gamble","us_stock","procter"],
+  ["KO","Coca-Cola","us_stock","coke cocacola"],["PEP","PepsiCo","us_stock","pepsi"],
+  ["COST","Costco","us_stock",""],["WMT","Walmart","us_stock",""],["HD","Home Depot","us_stock","depot"],
+  ["DIS","Disney","us_stock",""],["NFLX","Netflix","us_stock",""],["AMD","AMD","us_stock",""],
+  ["INTC","Intel","us_stock",""],["AVGO","Broadcom","us_stock",""],["ORCL","Oracle","us_stock",""],
+  ["PFE","Pfizer","us_stock",""],["LLY","Eli Lilly","us_stock","lilly"],["ABBV","AbbVie","us_stock",""],
+  ["XOM","Exxon Mobil","us_stock","exxon"],["CVX","Chevron","us_stock",""],["NKE","Nike","us_stock",""],
+  ["MCD","McDonald's","us_stock","mcdonalds"],["SBUX","Starbucks","us_stock",""],
+  ["SPY","SPDR S&P 500","us_stock",""],["IVV","iShares Core S&P 500","us_stock",""],
+  ["SCHD","Schwab US Dividend Equity","us_stock",""],["VUG","Vanguard Growth","us_stock",""],
+  ["VYM","Vanguard High Dividend Yield","us_stock",""],["VT","Vanguard Total World","us_stock",""],
+  ["DOGE","Dogecoin","crypto","dogecoin doge"],["ADA","Cardano","crypto",""],["XRP","XRP","crypto","ripple"],
+  ["DOT","Polkadot","crypto",""],["AVAX","Avalanche","crypto",""],["LTC","Litecoin","crypto",""],
+  ["SHIB","Shiba Inu","crypto","shiba"]
+];
+var SAY_STOP = {};
+("i a an the my of in into from to at for and with on by bought buy buying sold sell selling purchased "+
+ "added add adding have has own hold holding got get picked up shares share each apiece average avg total "+
+ "dollars dollar bucks usd price token tokens coin coins unit units more another worth account accounts "+
+ "also just today yesterday some all it its them these those this that then plus now new more of per cost etf").split(" ")
+  .forEach(function(w){ SAY_STOP[w] = 1; });
+/* words in so many names that hearing one says nothing about which */
+var SAY_GENERIC = {};
+("vanguard total stock market international developed markets select sector trust ishares month treasury "+
+ "small value bond fund index growth dividend high yield health care real estate income savings checking "+
+ "core equity world coin platforms chase home fidelity schwab robinhood coinbase ally etrade").split(" ").forEach(function(w){ SAY_GENERIC[w] = 1; });
+var SAY_NUMS = {zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10,
+  eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18,
+  nineteen:19, twenty:20, thirty:30, forty:40, fifty:50, hundred:100, half:.5};
+
+/* every symbol this portfolio knows, with what it is called */
+function sayIndex(){
+  var ticks = {}, words = {};
+  function add(t, name, cls, also){
+    if (!ticks[t]) ticks[t] = {tick:t, name:name, cls:cls};
+    (name+" "+(also||"")).toLowerCase().replace(/[^a-z ]/g,"").split(/\s+/).forEach(function(w){
+      if (w.length < 4 || SAY_GENERIC[w] || SAY_STOP[w]) return;
+      (words[w] = words[w] || {})[t] = 1;
+    });
+  }
+  HOLDINGS.forEach(function(h){ if (!OFF[h.cls]) add(h.tick, h.name, h.cls); });
+  KNOWN.forEach(function(k){ add(k[0], k[1], k[2], k[3]); });
+  return {ticks:ticks, words:words};
+}
+function lev(a, b){
+  var d = [], i, j;
+  for (i = 0; i <= a.length; i++){ d[i] = [i]; }
+  for (j = 1; j <= b.length; j++) d[0][j] = j;
+  for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1] + (a[i-1]===b[j-1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function sayNum(t){ return parseFloat(String(t).replace(/[$,]/g, "")); }
+
+/* the account a sentence names: its name counts for more than its firm, so
+   "Fidelity brokerage" is Brokerage and not the HSA that Fidelity also holds */
+function sayAccount(low){
+  var best = null, top = 0;
+  ACCOUNTS.forEach(function(a){
+    var s = 0, nm = a.name.toLowerCase(), firm = (a.firm||"").toLowerCase();
+    if (new RegExp("\\b"+nm.replace(/[^a-z0-9 ]/g,"")+"\\b").test(low)) s += 3;
+    else nm.split(/\s+/).forEach(function(w){ if (w.length > 2 && new RegExp("\\b"+w+"\\b").test(low)) s += 1; });
+    if (firm && firm !== "manual" && new RegExp("\\b"+firm.replace(/[^a-z0-9 ]/g,"")+"\\b").test(low)) s += 2;
+    if (s > top){ top = s; best = a; }
+  });
+  return best;
+}
+
+function sayClause(s, ix, act){
+  var low = s.toLowerCase(), out = {act:act, tick:"", heard:"", shares:NaN, price:NaN, acct:null, text:s.trim()};
+  if (/\b(sold|sell|selling|trimmed|removed|dumped|got rid of)\b/.test(low)) out.act = "sell";
+  else if (/\b(bought|buy|buying|purchased|added|add|adding|picked up)\b/.test(low)) out.act = "buy";
+  else if (/\b(have|has|own|hold|holding|now at)\b/.test(low)) out.act = "set";
+
+  /* a price said as a total, then one said per share */
+  var m, rest = s, total = NaN;
+  if ((m = rest.match(/\b(?:for\s+)?(?:a\s+)?total\s+(?:of\s+)?\$?(\d[\d,]*(?:\.\d+)?)/i)) ||
+      (m = rest.match(/\$?(\d[\d,]*(?:\.\d+)?)\s+(?:in\s+)?total\b/i))){
+    total = sayNum(m[1]); rest = rest.replace(m[0], " ");
+  }
+  if ((m = rest.match(/(?:\bat\b|@|\bfor\b)\s+(?:an?\s+)?(?:average\s+(?:of\s+)?)?\$?(\d[\d,]*(?:\.\d+)?)(\s*(?:dollars|bucks))?(\s*(?:each|apiece|a share|per share|a coin|per coin|a piece|average|avg|on average))?/i))){
+    if (/^for/i.test(m[0].trim()) && !m[3] && !/average/i.test(m[0])) total = sayNum(m[1]);
+    else out.price = sayNum(m[1]);
+    rest = rest.replace(m[0], " ");
+  }
+  if (!isFinite(out.price) && (m = rest.match(/\$(\d[\d,]*(?:\.\d+)?)/))){ out.price = sayNum(m[1]); rest = rest.replace(m[0], " "); }
+
+  var a = sayAccount(rest.toLowerCase());
+  if (a){
+    out.acct = a.id;
+    var drop = (a.name+" "+(a.firm||"")).toLowerCase().split(/\s+/);
+    rest = rest.replace(/[A-Za-z][A-Za-z0-9.&'\-]*/g, function(w){ return drop.indexOf(w.toLowerCase()) >= 0 ? " " : w; });
+  }
+
+  var toks = rest.match(/[A-Za-z][A-Za-z0-9.&'\-]*|\d[\d,]*(?:\.\d+)?/g) || [];
+  for (var i = 0; i < toks.length; i++){
+    var w = toks[i].toLowerCase();
+    if (/^\d/.test(toks[i])) { out.shares = sayNum(toks[i]); toks.splice(i,1); break; }
+    if (SAY_NUMS[w] !== undefined && !SAY_STOP[w]) { out.shares = SAY_NUMS[w]; toks.splice(i,1); break; }
+  }
+  if (isFinite(total) && out.shares > 0) out.price = total / out.shares;
+
+  /* which symbol: one written exactly, then a lower-case one, then a name,
+     then something close to a symbol already held */
+  var words = toks.map(function(t){ return t.replace(/['’]s$/i, ""); });
+  function find(test){ for (var k = 0; k < words.length; k++){ var r = test(words[k]); if (r) return r; } return ""; }
+  var low3 = function(w){ var u = w.toUpperCase(); return w.length >= 3 && !SAY_STOP[w.toLowerCase()] && ix.ticks[u] ? u : ""; };
+  out.tick = find(function(w){ return w === w.toUpperCase() && w !== "I" && w !== "A" && ix.ticks[w] ? w : ""; }) ||
+             find(low3) ||
+             find(function(w){ var t = ix.words[w.toLowerCase()]; return t && Object.keys(t).length === 1 ? Object.keys(t)[0] : ""; });
+  if (!out.tick){
+    var guess = find(function(w){ return /^[A-Z]{2,5}$/.test(w) ? w : ""; });
+    if (guess){
+      var near = Object.keys(ix.ticks).filter(function(t){ return t.length === guess.length && lev(t, guess) === 1 &&
+        HOLDINGS.some(function(h){ return h.tick === t; }); });
+      out.tick = near.length === 1 ? near[0] : guess;
+      out.heard = guess;
+    }
+  }
+  return out;
+}
+
+/* Split what was said into one change per sentence. A sentence with no symbol
+   - "and that was in my Roth" - finishes the one before it. */
+function parseSaid(text){
+  var ix = sayIndex(), rows = [], act = "buy";
+  var t = text.replace(/(\d),(?=\d{3}\b)/g, "$1")
+    .replace(/\b([A-Za-z]+) and a half\b/gi, function(m, w){ var n = SAY_NUMS[w.toLowerCase()]; return n !== undefined ? String(n + .5) : m; })
+    .replace(/\b([A-Z])(?:\.?\s+|\.)(?=[A-Z]\b)/g, "$1")
+    .replace(/(\d)\.(\d)/g, "$1\u2024$2");
+  t.split(/[.!?;\n,]|\b(?:and then|then|also|plus|and)\b/i).forEach(function(part){
+    part = part.replace(/\u2024/g, ".").trim();
+    if (!part) return;
+    var r = sayClause(part, ix, act), prev = rows[rows.length-1];
+    act = r.act;
+    if (!r.tick && !(r.shares > 0) && !r.acct && !isFinite(r.price)) return;
+    if (prev && (!r.tick || (r.tick === prev.tick && !(r.shares > 0)))){
+      if (r.acct && !prev.acct) prev.acct = r.acct;
+      if (isFinite(r.price) && !isFinite(prev.price)) prev.price = r.price;
+      prev.text += ", " + part;
+      return;
+    }
+    if (r.tick || r.shares > 0) rows.push(r);
+  });
+  /* no account said: where the symbol already lives, or the default one */
+  rows.forEach(function(r){
+    if (r.acct) return;
+    var held = HOLDINGS.filter(function(h){ return h.tick === r.tick; }).map(function(h){ return h.acct; });
+    r.acct = held.length === 1 ? held[0] : held.indexOf(defaultAcct()) >= 0 || !held.length ? defaultAcct() : held[0];
+  });
+  return rows;
+}
+
+/* what a change would do, and whether it can */
+function sayOutcome(c){
+  if (c.act === "skip") return {ok:true, msg:"Skipped"};
+  if (!c.tick) return {ok:false, msg:"Add a symbol."};
+  if (!(c.shares > 0)) return {ok:false, msg:"Enter how many shares."};
+  var cur = findHolding(c.acct, c.tick), px = c.price > 0 ? c.price : cur ? cur.price : NaN, msg;
+  if (c.act === "sell"){
+    if (!cur) return {ok:false, msg:"There is no " + c.tick + " in this account."};
+    if (c.shares > cur.shares + 1e-9) return {ok:false, msg:"This account holds " + shrTxt(cur.shares) + "."};
+    msg = c.shares >= cur.shares - 1e-9 ? "Sells all " + shrTxt(cur.shares) + " shares"
+                                       : shrTxt(cur.shares) + " → " + shrTxt(cur.shares - c.shares) + " shares";
+  } else {
+    if (!(px > 0)) return {ok:false, msg:"Enter the price paid."};
+    var to = c.act === "set" ? c.shares : (cur ? cur.shares : 0) + c.shares;
+    if (!cur) msg = "New · " + shrTxt(to) + " shares at " + usd(px,2);
+    else {
+      var add = to - cur.shares;
+      var cost = add > 0 ? (cur.shares * cur.cost + add * px) / to : cur.cost;
+      msg = shrTxt(cur.shares) + " → " + shrTxt(to) + " shares · " + usd(cost,2) + " average cost";
+    }
+  }
+  return {ok:true, msg:msg};
+}
+
+function sayApply(c){
+  var cur = findHolding(c.acct, c.tick);
+  if (c.act === "sell"){
+    cur.shares -= c.shares;
+    if (cur.shares < 1e-9) HOLDINGS.splice(HOLDINGS.indexOf(cur), 1);
+    return;
+  }
+  var px = c.price > 0 ? c.price : cur ? cur.price : 0;
+  if (cur){
+    var to = c.act === "set" ? c.shares : cur.shares + c.shares, add = to - cur.shares;
+    if (add > 0) cur.cost = (cur.shares * cur.cost + add * px) / to;
+    cur.shares = to;
+    return;
+  }
+  /* held in another account: the same thing, so the same name, type and mix */
+  var twin = HOLDINGS.filter(function(h){ return h.tick === c.tick; })[0], rec;
+  if (twin){
+    rec = clone(twin);
+    delete rec.bought; delete rec.held;
+    rec.acct = c.acct; rec.shares = c.shares; rec.cost = px;
+  } else {
+    var k = KNOWN.filter(function(k){ return k[0] === c.tick; })[0];
+    var here = HOLDINGS.filter(function(h){ return h.acct === c.acct && !OFF[h.cls]; });
+    var cls = k ? k[2] : here.length && here.every(function(h){ return h.cls === here[0].cls; }) ? here[0].cls : "us_stock";
+    rec = newRecord({tick:c.tick, shares:c.shares, price:px, cost:px, cls:cls}, c.acct);
+    if (k) rec.name = k[1];
+  }
+  HOLDINGS.push(rec);
+}
+
+function sheetSay(preset){
+  if (!ACCOUNTS.length){ toast("Add an account first"); sheetAccount(); return; }
+  openSheet("Say what changed",
+    '<textarea class="box say" id="fSay" spellcheck="false" autocapitalize="sentences" ' +
+    'placeholder="Tap the microphone on the keyboard, then say something like: Bought 5 VTI in Fidelity brokerage at $312. Sold 1 Uniswap.">' +
+    esc(preset || "") + '</textarea>',
+    null, {label:"Next", dirty:function(){ return el("fSay").value.trim() !== ""; }, save:function(){
+      var text = el("fSay").value, rows = parseSaid(text);
+      if (!rows.length){ toast("Nothing could be read"); return; }
+      sheetSayCheck(rows, text);
+    }});
+}
+
+function sheetSayCheck(rows, text){
+  var acts = [["buy","Buy"],["sell","Sell"],["set","Set total"],["skip","Skip"]];
+  var html = '<div class="err" id="fErr" role="alert"></div>' + rows.map(function(r, i){
+    return '<div class="sect"' + (i ? '' : ' style="margin-top:var(--s-2)"') + '>' +
+      esc(r.heard && r.heard !== r.tick ? "Heard “" + r.heard + "”" : r.text) + '</div>' +
+      '<div class="card">' +
+      fieldSelect("vA"+i, "Action", acts, r.act) +
+      fieldText("vT"+i, "Symbol", "VTI", r.tick, "text", "characters") +
+      fieldText("vN"+i, "Shares", "1", r.shares > 0 ? String(r.shares) : "", "number") +
+      fieldSelect("vC"+i, "Account", acctOptions(), r.acct) +
+      fieldText("vP"+i, "Price each", "", r.price > 0 ? String(+r.price.toFixed(4)) : "", "number") +
+      '</div><div class="vs" id="vS'+i+'"></div>';
+  }).join("") + '<button class="btn ghost" id="vBack" style="margin-top:var(--s-7)">Back</button>';
+  function read(i){
+    return {act:el("vA"+i).value, tick:el("vT"+i).value.trim().toUpperCase(),
+      shares:parseFloat(el("vN"+i).value), acct:el("vC"+i).value, price:parseFloat(el("vP"+i).value)};
+  }
+  function sync(i){
+    var c = read(i), cur = findHolding(c.acct, c.tick), o = sayOutcome(c);
+    /* a sale leaves the cost per share of what remains as it was, so its
+       price changes nothing here */
+    el("wrap-vP"+i).style.display = c.act === "sell" || c.act === "skip" ? "none" : "";
+    el("vP"+i).placeholder = cur ? cur.price.toFixed(2) : "";
+    ["wrap-vT","wrap-vN","wrap-vC"].forEach(function(w){ el(w+i).style.display = c.act === "skip" ? "none" : ""; });
+    el("vS"+i).textContent = o.msg;
+    el("vS"+i).classList.toggle("bad", !o.ok);
+    return o;
+  }
+  openSheet(rows.length === 1 ? "Check 1 change" : "Check " + rows.length + " changes", html, function(){
+    rows.forEach(function(r, i){
+      ["vA","vT","vN","vC","vP"].forEach(function(f){
+        el(f+i).addEventListener(f === "vA" || f === "vC" ? "change" : "input", function(){ sync(i); });
+      });
+      sync(i);
+    });
+    el("vBack").addEventListener("click", function(){ sheetSay(text); });
+  }, {label:"Save", dirty:function(){ return true; }, save:function(){
+    var bad = -1, all = rows.map(function(r, i){ var o = sync(i); if (!o.ok && bad < 0) bad = i; return read(i); });
+    if (bad >= 0){ formError((rows.length > 1 ? "Change " + (bad+1) + ": " : "") + el("vS"+bad).textContent); return; }
+    var was = clone(HOLDINGS), n = 0;
+    all.forEach(function(c){ if (c.act !== "skip"){ sayApply(c); n++; } });
+    if (!n){ toast("Nothing to save"); return; }
+    save(); renderAll(); closeSheet();
+    toast(n === 1 ? "1 change saved" : n + " changes saved", function(){
+      HOLDINGS = was; save(); renderAll(); toast("Changes undone");
+    });
+  }});
 }
 
 function sheetAbout(){
@@ -2101,6 +2402,7 @@ document.addEventListener("click", function(e){
     else if (which==="holding") sheetHolding();
     else if (which==="offAsset") sheetHolding("property");
     else if (which==="import") sheetImport();
+    else if (which==="say") sheetSay();
     else if (which==="scan") sheetScan();
     else if (which==="about") sheetAbout();
     return;
