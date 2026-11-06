@@ -535,7 +535,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 20</div>
+      <div class="foot">Build 21</div>
     </div>
   </section>
 
@@ -1633,10 +1633,12 @@ function sheetHoldDetail(idx){
     (h.yield ? line("Per year", usd(inc)) : "")+
     (h.mix ? line("Sector", esc(Object.keys(h.mix).length===1?Object.keys(h.mix)[0]:"Fund, many sectors")) : "")+
     (h.cat ? line("Category", esc(h.cat)) : "")+
-    '</div>'+(h.cls==="cash" ? "" : '<button class="btn ghost" id="fBuy">Record a buy</button>')+
+    '</div>'+(h.cls==="cash" ? "" : '<button class="btn ghost" id="fBuy">Record a buy</button>'+
+                            '<button class="btn ghost" id="fSell">Record a sale</button>')+
     '<button class="btn ghost" id="fEdit">Edit holding</button>'+
     '<button class="btn warn" id="fDel">Remove holding</button>', function(){
       if (el("fBuy")) el("fBuy").addEventListener("click", function(){ sheetBuy(h); });
+      if (el("fSell")) el("fSell").addEventListener("click", function(){ sheetSell(h); });
       el("fEdit").addEventListener("click", function(){ sheetHolding(null, h); });
       el("fDel").addEventListener("click", function(){ removeHolding(h, h.tick); });
     });
@@ -1678,6 +1680,45 @@ function sheetBuy(h){
   openSheet("Buy "+h.tick, html, function(){
     el("fBuySh").addEventListener("input", preview);
     el("fBuyPx").addEventListener("input", preview);
+    preview();
+  }, {label:"Save", save:commit});
+}
+
+/* fewer shares: the cost per share of what is left stays as it was. The sale
+   price only matters when the money goes to that account's cash. */
+function sheetSell(h){
+  var html = '<div class="err" id="fErr" role="alert"></div>'+
+    '<div class="card" style="margin-top:var(--s-2)">'+
+    fieldText("fSellSh","Shares sold","1","","number")+
+    fieldSwitch("fSellCash","Add to cash", false)+
+    fieldText("fSellPx","Sold at", h.price.toFixed(2),"","number")+
+    '</div><div class="note" id="fSellNote"></div>';
+  function read(){
+    return {act:"sell", tick:h.tick, acct:h.acct, shares:parseFloat(el("fSellSh").value),
+            price:parseFloat(el("fSellPx").value), cash:el("fSellCash").checked};
+  }
+  function preview(){
+    var c = read(), left = h.shares - c.shares;
+    el("wrap-fSellPx").style.display = c.cash ? "" : "none";
+    el("fSellNote").textContent = !(c.shares > 0)
+      ? "You hold " + shrTxt(h.shares) + " shares at " + usd(h.cost,2) + " each on average."
+      : left < -1e-9 ? "You hold " + shrTxt(h.shares) + " shares."
+      : (left < 1e-9 ? "This sells all of it." : "You will hold " + shrTxt(left) + " shares at " + usd(h.cost,2) + " each on average.") +
+        (c.cash ? " " + usd(c.shares * (c.price > 0 ? c.price : h.price), 2) + " goes to this account’s cash." : "");
+  }
+  function commit(){
+    var c = read(), o = sayOutcome(c);
+    if (!(c.shares > 0)){ formError("Enter how many shares you sold."); return; }
+    if (!o.ok){ formError(o.msg); return; }
+    var was = clone(HOLDINGS);
+    sayApply(c); save(); renderAll(); closeSheet();
+    toast(h.tick+" updated", function(){
+      HOLDINGS = was; save(); renderAll(); toast(h.tick+" restored");
+    });
+  }
+  openSheet("Sell "+h.tick, html, function(){
+    ["fSellSh","fSellPx"].forEach(function(f){ el(f).addEventListener("input", preview); });
+    el("fSellCash").addEventListener("change", preview);
     preview();
   }, {label:"Save", save:commit});
 }
