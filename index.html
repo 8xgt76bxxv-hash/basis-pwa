@@ -288,7 +288,8 @@ body.locked{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 /* ---------- forms ---------- */
 .field{display:flex;align-items:stretch;gap:var(--s-5);padding:0 var(--rail);min-height:48px;position:relative;background:var(--surface)}
 .field+.field::before{content:"";position:absolute;left:var(--rail);right:0;top:0;height:.5px;background:var(--sep)}
-.field label{font-size:var(--t-sub);width:104px;flex-shrink:0;display:flex;align-items:center;min-height:48px}
+/* a label is one line - it grows past the column rather than wrap */
+.field label{font-size:var(--t-sub);min-width:104px;flex-shrink:0;white-space:nowrap;display:flex;align-items:center;min-height:48px}
 .field input,.field select{
   flex:1;min-width:0;border:0;background:none;font-size:var(--t-body);text-align:right;outline:none;
   -webkit-appearance:none;appearance:none;padding:0;min-height:48px;
@@ -523,7 +524,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 15</div>
+      <div class="foot">Build 16</div>
     </div>
   </section>
 
@@ -1497,7 +1498,7 @@ function sheetHolding(preset, edit, acct){
     fieldText("fY","Yield %","1.21", edit && edit.yield ? String(edit.yield) : "","number")+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     fieldSelect("fSec","Sector", secOpts, spread ? "__keep" : edit && edit.mix ? Object.keys(edit.mix)[0] : "")+
-    fieldSelect("fCat","Crypto category", catOpts, edit && edit.cat ? edit.cat : "Store of Value")+
+    fieldSelect("fCat","Category", catOpts, edit && edit.cat ? edit.cat : "Store of Value")+
     '</div>';
   function commit(){
     var tick = el("fTick").value.trim().toUpperCase();
@@ -1605,7 +1606,7 @@ function sheetHoldDetail(idx){
     line("Gain", '<span class="'+tone(signed(g))+'">'+signed(g)+" ("+pct(gp,1)+')</span>')+
     (h.yield ? line("Per year", usd(inc)) : "")+
     (h.mix ? line("Sector", esc(Object.keys(h.mix).length===1?Object.keys(h.mix)[0]:"Fund, many sectors")) : "")+
-    (h.cat ? line("Crypto category", esc(h.cat)) : "")+
+    (h.cat ? line("Category", esc(h.cat)) : "")+
     '</div>'+(h.cls==="cash" ? "" : '<button class="btn ghost" id="fBuy">Record a buy</button>')+
     '<button class="btn ghost" id="fEdit">Edit holding</button>'+
     '<button class="btn warn" id="fDel">Remove holding</button>', function(){
