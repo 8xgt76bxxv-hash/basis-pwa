@@ -524,7 +524,7 @@ textarea.box{
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 17</div>
+      <div class="foot">Build 18</div>
     </div>
   </section>
 
@@ -1494,7 +1494,7 @@ function sheetHolding(preset, edit, acct){
     fieldText("fSh","Shares","100", edit && !OFF[edit.cls] ? String(edit.shares) : "","number")+
     fieldText("fPx","Price now","312.44", edit ? String(abs(edit.price)) : "","number")+
     fieldText("fCb","Cost per share","214.80", edit ? String(abs(edit.cost)) : "","number")+
-    fieldText("fBought","Bought","", edit && edit.bought ? edit.bought : "","date")+
+    fieldText("fBought","First bought","", edit && edit.bought ? edit.bought : "","date")+
     fieldText("fY","Yield %","1.21", edit && edit.yield ? String(edit.yield) : "","number")+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     fieldSelect("fSec","Sector", secOpts, spread ? "__keep" : edit && edit.mix ? Object.keys(edit.mix)[0] : "")+
