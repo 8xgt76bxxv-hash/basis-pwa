@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=29">
+<link rel="apple-touch-icon" href="icon-180.png?v=30">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -279,7 +279,7 @@ button.row:active{background:var(--surface-2)}
 /* the discard prompt: an iOS action sheet over the sheet it guards. A tap
    anywhere but Discard keeps the edits. */
 .ask{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;justify-content:flex-end;
-  padding:0 var(--s-4) calc(env(safe-area-inset-bottom) + var(--s-4));background:rgba(0,0,0,.2);
+  padding:0 var(--s-4) calc(env(safe-area-inset-bottom) + var(--s-4));background:rgba(0,0,0,.45);
   opacity:0;visibility:hidden;transition:opacity .2s,visibility 0s .2s}
 .ask.on{opacity:1;visibility:visible;transition:opacity .2s}
 .ask-g{width:100%;max-width:504px;margin:0 auto;background:var(--surface-2);border-radius:var(--r-card);overflow:hidden;
@@ -542,7 +542,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 29</div>
+      <div class="foot">Build 30</div>
     </div>
   </section>
 
@@ -1732,16 +1732,15 @@ function sheetSell(h){
   var html = '<div class="err" id="fErr" role="alert"></div>'+
     '<div class="card" style="margin-top:var(--s-2)">'+
     fieldText("fSellSh","Shares sold","1","","number")+
-    fieldSwitch("fSellCash","Add to cash", false)+
     fieldText("fSellPx","Sold at", h.price.toFixed(2),"","number")+
-    '</div><div class="note" id="fSellNote"></div>';
+    fieldSwitch("fSellCash","Add to cash", false)+
+    '</div><div class="note" id="fSellNote" style="min-height:2lh"></div>';
   function read(){
     return {act:"sell", tick:h.tick, acct:h.acct, shares:num(el("fSellSh").value),
             price:num(el("fSellPx").value), cash:el("fSellCash").checked};
   }
   function preview(){
     var c = read(), left = h.shares - c.shares;
-    el("wrap-fSellPx").style.display = c.cash ? "" : "none";
     el("fSellNote").textContent = !(c.shares > 0)
       ? "You hold " + shrTxt(h.shares) + " shares at " + usd(h.cost,2) + " each on average."
       : left < -1e-9 ? "You hold " + shrTxt(h.shares) + " shares."
