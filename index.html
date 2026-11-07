@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=32">
+<link rel="apple-touch-icon" href="icon-180.png?v=33">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -545,7 +545,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 32</div>
+      <div class="foot">Build 33</div>
     </div>
   </section>
 
@@ -666,14 +666,14 @@ var SEED_HOLDINGS = [
 ];
 
 /* ========================= helpers ========================= */
-var TODAY = new Date(2026, 9, 27);
+var TODAY = new Date(); TODAY.setHours(0,0,0,0);
 var N_DAYS = 1826, N_INTRA = 79;
 var PERIODS = [
   {k:"1D", n:N_INTRA, label:"today"},
-  {k:"1W", n:6,    label:"this week"},
-  {k:"1M", n:22,   label:"this month"},
-  {k:"3M", n:65,   label:"3 months"},
-  {k:"1Y", n:252,  label:"1 year"},
+  {k:"1W", n:7,    label:"this week"},
+  {k:"1M", n:30,   label:"this month"},
+  {k:"3M", n:91,   label:"3 months"},
+  {k:"1Y", n:365,  label:"1 year"},
   {k:"ALL",n:N_DAYS-1, label:"all time"}
 ];
 
@@ -782,7 +782,7 @@ function investedSeries(scope, periodKey){
 
 var seriesCache = {};
 function holdingSeries(h, periodKey){
-  var key = h.acct+"|"+h.tick+"|"+h.shares+"|"+h.price+"|"+h.cost+"|"+h.day+"|"+heldDays(h)+"|"+periodKey;
+  var key = h.acct+"|"+h.tick+"|"+h.shares+"|"+h.price+"|"+h.cost+"|"+h.day+"|"+heldDays(h)+"|"+periodKey+"|"+histV;
   if (seriesCache[key]) return seriesCache[key];
   var vol = VOL[h.cls] !== undefined ? VOL[h.cls] : .009;
   var out, i;
@@ -803,9 +803,28 @@ function holdingSeries(h, periodKey){
     seriesCache[key] = out;
     return out;
   }
+  var real = histFor(h);
   if (periodKey === "1D"){
     var prev = h.day ? h.price/(1+h.day/100) : h.price;
-    out = walk(h.acct+h.tick+"intra", N_INTRA, vol/7, prev || h.price, h.price);
+    /* there is no free source for the minutes in between, so a holding with
+       real prices goes straight from yesterday's close to now */
+    if (real){ out = []; for(i=0;i<N_INTRA;i++) out.push(prev + (h.price-prev)*i/(N_INTRA-1)); }
+    else out = walk(h.acct+h.tick+"intra", N_INTRA, vol/7, prev || h.price, h.price);
+  } else if (real){
+    /* each day's real close, from the day it was bought. Days owned before
+       the history starts are bridged from what you paid to the first close. */
+    var owned2 = Math.min(heldDays(h), N_DAYS-1) + 1, start = N_DAYS - owned2, today = dayNum(TODAY);
+    var pre = 0;
+    for(i=start;i<N_DAYS-1;i++) if (today-(N_DAYS-1-i) < real.t[0]) pre++;
+    var bridge = pre ? walk(h.acct+h.tick, pre+1, vol, h.cost || real.c[0], real.c[0]) : null;
+    out = [];
+    for(i=0;i<N_DAYS;i++){
+      if (i < start) out.push(0);
+      else if (i === N_DAYS-1) out.push(h.price);
+      else if (i - start < pre) out.push(bridge[i-start]);
+      else out.push(closeOn(real, today-(N_DAYS-1-i)));
+    }
+    out = out.slice(Math.max(0, N_DAYS - (periodDef(periodKey).n+1)));
   } else {
     var p; for(i=0;i<PERIODS.length;i++) if(PERIODS[i].k===periodKey) p=PERIODS[i];
     var owned = Math.min(heldDays(h), N_DAYS-1) + 1;
@@ -1253,6 +1272,9 @@ function renderSettings(){
     '<button class="row" data-sheet="pxkey"><div class="row-main"><div class="row-t">Stocks and funds</div>'+
     '<div class="row-s">'+(key ? 'From Finnhub, with your key' : 'Add a free Finnhub key to update these')+'</div></div>'+
     '<div class="row-r"><div class="row-v">'+(key ? 'On' : 'Off')+'</div></div><div class="chev"></div></button>'+
+    '<button class="row" data-sheet="histkey"><div class="row-main"><div class="row-t">Chart history</div>'+
+    '<div class="row-s">'+(getKey("td") ? 'From Twelve Data, with your key' : 'Crypto’s past year only. Add a free Twelve Data key for the rest')+'</div></div>'+
+    '<div class="row-r"><div class="row-v">'+(getKey("td") ? 'On' : 'Off')+'</div></div><div class="chev"></div></button>'+
     '<div class="row"><div class="row-main"><div class="row-t">Last updated</div></div>'+
     '<div class="row-r"><div class="row-v">'+(state.pxAt ? when(state.pxAt) : 'Never')+'</div></div></div>';
 
@@ -1280,23 +1302,65 @@ function renderSettings(){
 
 /* ========================= live prices ========================= */
 /* Crypto comes from CoinGecko, which needs no key. Stocks and funds come from
-   Finnhub, which needs a free one, pasted into Settings and kept on this
-   device. A price that cannot be fetched keeps the one it had, and "Updated"
-   moves only when prices really arrived. Cash and things with no market are
-   never asked about. */
-var PX_KEY = "basis.finnhub";
-function pxKey(){ try { return localStorage.getItem(PX_KEY) || ""; } catch(e){ return ""; } }
-function setPxKey(k){ try { if (k) localStorage.setItem(PX_KEY, k); else localStorage.removeItem(PX_KEY); } catch(e){} }
+   Finnhub, and their history from Twelve Data; both need a free key, pasted
+   into Settings and kept on this device. A price that cannot be fetched keeps
+   the one it had, and "Updated" moves only when prices really arrived. Cash
+   and things with no market are never asked about. */
+var KEYS = {
+  fh: {store:"basis.finnhub",    name:"Finnhub",     site:"finnhub.io",    url:"https://finnhub.io/register",
+       title:"Stock prices",     what:"today’s stock and fund prices"},
+  td: {store:"basis.twelvedata", name:"Twelve Data", site:"twelvedata.com", url:"https://twelvedata.com/register",
+       title:"Price history",    what:"the price history behind the chart"}
+};
+function getKey(k){ try { return localStorage.getItem(KEYS[k].store) || ""; } catch(e){ return ""; } }
+function setKey(k, v){ try { if (v) localStorage.setItem(KEYS[k].store, v); else localStorage.removeItem(KEYS[k].store); } catch(e){} }
+function pxKey(){ return getKey("fh"); }
 function getJSON(url){
   var c = window.AbortController ? new AbortController() : null;
-  var t = setTimeout(function(){ if (c) c.abort(); }, 10000);
+  var t = setTimeout(function(){ if (c) c.abort(); }, 15000);
   return fetch(url, c ? {cache:"no-store", signal:c.signal} : {cache:"no-store"})
     .then(function(r){ clearTimeout(t); if (!r.ok) throw new Error(String(r.status)); return r.json(); },
           function(e){ clearTimeout(t); throw e; });
 }
+/* Each service allows so many calls a minute. Calls past that wait their
+   turn instead of failing, so a long list of holdings fills in over a minute
+   or two rather than coming back with gaps. */
+function limiter(perMin){
+  var q = [], stamps = [], timer = null;
+  function pump(){
+    timer = null;
+    var now = Date.now();
+    stamps = stamps.filter(function(t){ return now - t < 60e3; });
+    while (q.length && stamps.length < perMin){ stamps.push(now); q.shift()(); }
+    if (q.length) timer = setTimeout(pump, 60e3 - (now - stamps[0]) + 100);
+  }
+  return function(fn){
+    return new Promise(function(res, rej){
+      q.push(function(){ fn().then(res, rej); });
+      if (!timer) pump();
+    });
+  };
+}
+var FH = limiter(55), TD = limiter(8), CG = limiter(10);
+/* a service that says "too many" gets asked again once the minute is up */
+function patient(lim, fn){
+  return lim(fn).catch(function(e){
+    if (!/429/.test(String(e && e.message))) throw e;
+    return new Promise(function(r){ setTimeout(r, 61e3); }).then(function(){ return lim(fn); });
+  });
+}
 function quoteStock(sym, key){
   return getJSON("https://finnhub.io/api/v1/quote?symbol="+encodeURIComponent(sym)+"&token="+encodeURIComponent(key))
     .then(function(q){ return q && q.c > 0 ? {p:q.c, d:+q.dp || 0} : null; });
+}
+function tdSeries(sym, key, size){
+  return getJSON("https://api.twelvedata.com/time_series?symbol="+encodeURIComponent(sym)+
+      "&interval=1day&order=asc&outputsize="+size+"&apikey="+encodeURIComponent(key))
+    .then(function(d){
+      if (d && d.status === "error") throw new Error(String(d.code || "error"));
+      return (d && d.values || []).map(function(v){ return [dayOf(v.datetime), +v.close]; })
+        .filter(function(v){ return isFinite(v[0]) && v[1] > 0; });
+    });
 }
 function priced(h){ return !OFF[h.cls] && h.cls !== "cash" && !!h.tick; }
 function stocksHeld(){ return HOLDINGS.some(function(h){ return priced(h) && h.cls !== "crypto"; }); }
@@ -1312,24 +1376,39 @@ function updatedText(){
   if (!state.pxAt) return "Prices not updated";
   return (stocksHeld() && !pxKey() ? "Crypto updated " : "Updated ") + when(state.pxAt);
 }
-var pxBusy = null;
+/* many answers can land in a second; the screen is redrawn once for them */
+var renderSoon = null;
+function rerender(){ if (!renderSoon) renderSoon = setTimeout(function(){ renderSoon = null; renderAll(); }, 250); }
+var pxBusy = null, quotedAt = {};
 /* resolves once every price it can reach is in. `loud` is a pull to refresh:
    it says when something did not update, which a quiet launch does not. */
 function refreshPrices(loud){
+  refreshHistory();
   if (pxBusy) return pxBusy;
   var key = pxKey(), hs = HOLDINGS.filter(priced), coins = {}, stocks = {}, got = {}, jobs = [];
+  function apply(k, q){
+    got[k] = q;
+    HOLDINGS.forEach(function(h){
+      if (priced(h) && (h.cls === "crypto" ? "c:" : "s:") + h.tick.toUpperCase() === k){ h.price = q.p; h.day = q.d; }
+    });
+    rerender();
+  }
   hs.forEach(function(h){
     var t = h.tick.toUpperCase();
     if (h.cls === "crypto") coins[t] = 1; else if (key) stocks[t] = 1;
   });
   var cs = Object.keys(coins);
-  if (cs.length) jobs.push(getJSON("https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&include_24hr_change=true&symbols="+
-      encodeURIComponent(cs.join(",").toLowerCase()))
+  if (cs.length) jobs.push(patient(CG, function(){
+      return getJSON("https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&include_24hr_change=true&symbols="+
+        encodeURIComponent(cs.join(",").toLowerCase())); })
     .then(function(d){ Object.keys(d || {}).forEach(function(k){
-      var q = d[k]; if (q && q.usd > 0) got["c:"+k.toUpperCase()] = {p:q.usd, d:+q.usd_24h_change || 0}; }); })
+      var q = d[k]; if (q && q.usd > 0) apply("c:"+k.toUpperCase(), {p:q.usd, d:+q.usd_24h_change || 0}); }); })
     .catch(function(){}));
   Object.keys(stocks).forEach(function(t){
-    jobs.push(quoteStock(t, key).then(function(q){ if (q) got["s:"+t] = q; }).catch(function(){}));
+    /* asked less than a minute ago: what it said then is still today's price */
+    if (quotedAt[t] && Date.now() - quotedAt[t].at < 60e3){ got["s:"+t] = quotedAt[t].q; return; }
+    jobs.push(patient(FH, function(){ return quoteStock(t, key); })
+      .then(function(q){ if (q){ quotedAt[t] = {at:Date.now(), q:q}; apply("s:"+t, q); } }).catch(function(){}));
   });
   pxBusy = Promise.all(jobs).then(function(){
     pxBusy = null;
@@ -1337,8 +1416,7 @@ function refreshPrices(loud){
     hs.forEach(function(h){
       if (h.cls !== "crypto" && !key) return;
       want++;
-      var q = got[(h.cls === "crypto" ? "c:" : "s:") + h.tick.toUpperCase()];
-      if (q){ h.price = q.p; h.day = q.d; n++; } else missed[h.tick.toUpperCase()] = 1;
+      if (got[(h.cls === "crypto" ? "c:" : "s:") + h.tick.toUpperCase()]) n++; else missed[h.tick.toUpperCase()] = 1;
     });
     if (n){ state.pxAt = Date.now(); save(); }
     renderAll();
@@ -1346,38 +1424,111 @@ function refreshPrices(loud){
     var miss = Object.keys(missed);
     if (want && !n) toast("Couldn’t reach prices. Check your connection.");
     else if (miss.length) toast("No price for " + miss.slice(0,3).join(", ") + (miss.length > 3 ? " and " + (miss.length-3) + " more" : ""));
-    else if (stocksHeld() && !key) toast("Stocks need a free key", function(){ sheetPxKey(); }, "Add");
+    else if (stocksHeld() && !key) toast("Stocks need a free key", function(){ sheetKey("fh"); }, "Add");
   });
   return pxBusy;
 }
-function sheetPxKey(){
-  var had = pxKey();
+
+/* ---- history: one closing price a day, kept on this device ----
+   Twelve Data has every holding's past five years, crypto included. Without
+   its key, CoinGecko still gives crypto its past year. Stored as day numbers
+   and closes, oldest first, and topped up once a day. */
+var HIST_KEY = "basis.hist", HIST = {}, histV = 0;
+try { HIST = JSON.parse(localStorage.getItem(HIST_KEY) || "{}") || {}; } catch(e){ HIST = {}; }
+function saveHist(){ try { localStorage.setItem(HIST_KEY, JSON.stringify(HIST)); } catch(e){} }
+function dayOf(ymd){ var m = /^(\d{4})-(\d\d)-(\d\d)/.exec(ymd || ""); return m ? Date.UTC(+m[1], m[2]-1, +m[3])/86400e3 : NaN; }
+function dayNum(d){ return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())/86400e3; }
+function histKey(h){ return (h.cls === "crypto" ? "c:" : "s:") + h.tick.toUpperCase(); }
+function histFor(h){ var e = priced(h) && HIST[histKey(h)]; return e && e.t && e.t.length ? e : null; }
+/* the close on a day, or the last one before it - a weekend holds Friday's */
+function closeOn(e, day){
+  var lo = 0, hi = e.t.length - 1;
+  if (day < e.t[0]) return NaN;
+  while (lo < hi){ var mid = (lo + hi + 1) >> 1; if (e.t[mid] <= day) lo = mid; else hi = mid - 1; }
+  return e.c[lo];
+}
+function mergeHist(k, rows, src){
+  var e = HIST[k] && HIST[k].src === src ? HIST[k] : {t:[], c:[]}, map = {}, i;
+  for (i = 0; i < e.t.length; i++) map[e.t[i]] = e.c[i];
+  rows.forEach(function(r){ map[r[0]] = r[1]; });
+  var days = Object.keys(map).map(Number).sort(function(a,b){ return a-b; });
+  HIST[k] = {t:days, c:days.map(function(d){ return map[d]; }), src:src, at:dayNum(new Date())};
+  saveHist(); histV++; rerender();
+}
+var histBusy = {};
+function refreshHistory(){
+  var td = getKey("td"), today = dayNum(new Date()), seen = {};
+  HOLDINGS.filter(priced).forEach(function(h){
+    var k = histKey(h), t = h.tick.toUpperCase(), e = HIST[k], crypto = h.cls === "crypto";
+    if (seen[k] || histBusy[k]) return;
+    seen[k] = 1;
+    var src = td ? "td" : crypto ? "cg" : null;
+    if (!src) return;
+    if (e && e.src === src && e.at >= today) return;
+    if (e && e.tried === src + today) return;
+    histBusy[k] = 1;
+    var job;
+    if (src === "td"){
+      /* a store already holding this symbol only needs the days since */
+      var last = e && e.src === "td" && e.t.length ? e.t[e.t.length-1] : 0;
+      var size = last ? Math.min(N_DAYS, today - last + 3) : N_DAYS;
+      job = patient(TD, function(){ return tdSeries(crypto ? t + "/USD" : t, td, size); });
+    } else {
+      job = (e && e.id ? Promise.resolve(e.id) :
+        patient(CG, function(){ return getJSON("https://api.coingecko.com/api/v3/search?query="+encodeURIComponent(t)); })
+          .then(function(d){
+            var hit = (d && d.coins || []).filter(function(c){ return String(c.symbol).toUpperCase() === t; })[0];
+            if (!hit) throw new Error("unknown");
+            return hit.id;
+          }))
+        .then(function(id){
+          return patient(CG, function(){ return getJSON("https://api.coingecko.com/api/v3/coins/"+encodeURIComponent(id)+
+            "/market_chart?vs_currency=usd&days=365&interval=daily"); })
+            .then(function(d){
+              var rows = (d && d.prices || []).map(function(p){ return [Math.floor(p[0]/86400e3), +p[1]]; });
+              return {rows:rows, id:id};
+            });
+        });
+    }
+    job.then(function(r){
+      var rows = src === "td" ? r : r.rows;
+      mergeHist(k, rows, src);
+      if (src === "cg") { HIST[k].id = r.id; saveHist(); }
+    }).catch(function(){
+      /* a symbol the service does not know is not asked about again today */
+      HIST[k] = HIST[k] || {t:[], c:[]}; HIST[k].tried = src + today; saveHist();
+    }).then(function(){ delete histBusy[k]; });
+  });
+}
+
+function sheetKey(kind){
+  var K = KEYS[kind], had = getKey(kind);
   var html = '<div class="err" id="fErr" role="alert"></div>'+
     '<div class="card" style="margin-top:var(--s-2)">'+
-    fieldText("fPxKey","Key","Paste your key", had)+
+    fieldText("fKey","Key","Paste your key", had)+
     '</div>'+
-    '<div class="note">Finnhub gives a free key for stock and fund prices. Sign up at '+
-    '<a href="https://finnhub.io/register" target="_blank" rel="noopener" style="color:var(--accent)">finnhub.io</a>, '+
+    '<div class="note">'+K.name+' gives a free key for '+K.what+'. Sign up at '+
+    '<a href="'+K.url+'" target="_blank" rel="noopener" style="color:var(--accent)">'+K.site+'</a>, '+
     'then copy the API key from your dashboard and paste it here. It stays on this device.</div>'+
-    (had ? '<button class="btn warn" id="fPxDel">Remove key</button>' : '');
+    (had ? '<button class="btn warn" id="fKeyDel">Remove key</button>' : '');
   function commit(){
-    var k = el("fPxKey").value.trim();
-    if (!k){ setPxKey(""); renderAll(); closeSheet(); return; }
+    var k = el("fKey").value.trim();
+    if (!k){ setKey(kind, ""); renderAll(); closeSheet(); return; }
     el("sheetClose").disabled = true;
     /* try it on one fund before keeping it, so a typo shows up here and not
-       as stocks that quietly never move */
-    quoteStock("SPY", k).then(function(q){
-      if (!q) throw new Error("empty");
-      setPxKey(k); closeSheet(); toast("Key saved"); refreshPrices(true);
+       as prices that quietly never move */
+    (kind === "fh" ? quoteStock("SPY", k).then(function(q){ if (!q) throw new Error("empty"); })
+                   : tdSeries("SPY", k, 1)).then(function(){
+      setKey(kind, k); closeSheet(); toast("Key saved"); refreshPrices(true);
     }).catch(function(e){
       el("sheetClose").disabled = false;
       formError(/401|403/.test(String(e && e.message)) ? "That key didn’t work. Check it and paste it again."
                                                    : "Couldn’t check the key. Check your connection.");
     });
   }
-  openSheet("Stock prices", html, function(){
-    if (had) el("fPxDel").addEventListener("click", function(){
-      setPxKey(""); renderAll(); closeSheet(); toast("Key removed");
+  openSheet(K.title, html, function(){
+    if (had) el("fKeyDel").addEventListener("click", function(){
+      setKey(kind, ""); renderAll(); closeSheet(); toast("Key removed");
     });
   }, {label:"Save", save:commit});
 }
@@ -2646,7 +2797,8 @@ document.addEventListener("click", function(e){
     else if (which==="say") sheetSay();
     else if (which==="scan") sheetScan();
     else if (which==="about") sheetAbout();
-    else if (which==="pxkey") sheetPxKey();
+    else if (which==="pxkey") sheetKey("fh");
+    else if (which==="histkey") sheetKey("td");
     return;
   }
 });
@@ -2736,7 +2888,8 @@ window.addEventListener("scroll", syncTopbars, {passive:true});
       /* the spinner stays until the prices are in, and a little longer if
          they come back faster than it can be read */
       var t0 = Date.now();
-      refreshPrices(true).then(function(){
+      var slow = new Promise(function(r){ setTimeout(r, 4000); });
+      Promise.race([refreshPrices(true), slow]).then(function(){
         setTimeout(function(){
           p.classList.remove("busy"); p.style.height = "0px"; label(p, "Pull to refresh");
         }, Math.max(0, 650 - (Date.now() - t0)));
