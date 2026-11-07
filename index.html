@@ -256,12 +256,17 @@ button.row:active{background:var(--surface-2)}
   transform:translateY(102%);transition:transform .32s cubic-bezier(.32,.72,0,1);
   max-height:92dvh;display:flex;flex-direction:column;
 }
+/* the sheet's colour runs on past its edge, so no sliver of page shows under it */
+.sheet::after{content:"";position:absolute;left:0;right:0;top:100%;height:120px;background:inherit;pointer-events:none}
 .sheet.on{transform:none}
 .grip{width:36px;height:var(--s-2);border-radius:var(--r-pill);background:var(--sep-strong);margin:var(--s-4) auto 0;flex-shrink:0;
   position:relative;touch-action:none;cursor:grab}
 .grip::after{content:"";position:absolute;left:-40px;right:-40px;top:calc(-1*var(--s-6));bottom:calc(-1*var(--s-6))}
 .sheet.drag{transition:none}
-body.locked{position:fixed;left:0;right:0;width:100%;overflow:hidden}
+/* the page holds still under a sheet by not scrolling, not by fixing the
+   body: on the Home Screen a fixed body cut the viewport short, and the sheet
+   ended well above the bottom of the screen */
+:root:has(body.locked),body.locked{overflow:hidden}
 /* the title stays centred between whatever sits either side of it: a form's
    Cancel on the left, its one action - or a plain sheet's Done - on the right */
 .sheet-h{display:grid;grid-template-columns:1fr minmax(0,max-content) 1fr;align-items:center;gap:var(--s-4);padding:var(--s-5) var(--rail) var(--s-4);flex-shrink:0;touch-action:none}
@@ -536,7 +541,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 23</div>
+      <div class="foot">Build 24</div>
     </div>
   </section>
 
@@ -1274,7 +1279,6 @@ function openSheet(title, html, after, form){
   if (!document.body.classList.contains("locked")){
     syncTopbars();
     lockedY = window.scrollY;
-    document.body.style.top = (-lockedY)+"px";
     document.body.classList.add("locked");
   }
   /* a form gets Cancel opposite the one thing it is for, as iOS sets them
@@ -2329,7 +2333,7 @@ function sheetAbout(){
   openSheet("About",
     '<div class="card" style="margin-top:var(--s-2)">'+
     '<div class="row"><div class="row-main"><div class="row-t">Your data</div>'+
-    '<div class="row-s" style="white-space:normal">Everything you add stays on this device. Nothing is uploaded.</div></div></div>'+
+    '<div class="row-s" style="white-space:normal">Everything you add stays on this device.</div></div></div>'+
     '</div>');
 }
 
