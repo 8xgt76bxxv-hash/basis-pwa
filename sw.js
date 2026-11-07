@@ -1,4 +1,4 @@
-const CACHE = "basis-v26";
+const CACHE = "basis-v27";
 const SHELL = ["./", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
