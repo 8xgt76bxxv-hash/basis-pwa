@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=31">
+<link rel="apple-touch-icon" href="icon-180.png?v=32">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -375,7 +375,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
   <section class="scroll on" id="v-portfolio">
     <div class="topbar" data-topbar>
       <div class="topbar-in pad">
-        <div class="topbar-lead" id="updatedAt">Updated 9:41 AM</div>
+        <div class="topbar-lead" id="updatedAt"></div>
         <div class="topbar-title">Portfolio</div>
         <button class="topbar-act" data-sheet="addMenu">Add</button>
       </div>
@@ -523,6 +523,9 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
       </div>
       <div class="card" id="defAcctCard"></div>
 
+      <div class="sect">Prices</div>
+      <div class="card" id="pxCard"></div>
+
       <div class="sect">Appearance</div>
       <div class="card"><div class="card-pad" style="padding-top:var(--s-5)"><div class="seg" id="themeSeg" style="margin-top:0"></div></div></div>
 
@@ -542,7 +545,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 31</div>
+      <div class="foot">Build 32</div>
     </div>
   </section>
 
@@ -709,7 +712,7 @@ function el(id){ return document.getElementById(id); }
 var KEY = "basis.v2";
 var state = {
   tab:"portfolio", period:"1M", acct:"all", bAcct:"all",
-  theme:"system", scrubIndex:null, updated:new Date(TODAY.getTime()+9*3600e3+41*60e3)
+  theme:"system", scrubIndex:null, pxAt:0
 };
 var ACCOUNTS, HOLDINGS;
 
@@ -724,10 +727,11 @@ function load(){
     if (d && d.holdings) HOLDINGS = d.holdings;
     if (d && d.theme) state.theme = d.theme;
     if (d && d.defAcct) state.defAcct = d.defAcct;
+    if (d && d.pxAt) state.pxAt = d.pxAt;
   } catch(e){}
 }
 function save(){
-  try { localStorage.setItem(KEY, JSON.stringify({accounts:ACCOUNTS, holdings:HOLDINGS, theme:state.theme, defAcct:state.defAcct})); }
+  try { localStorage.setItem(KEY, JSON.stringify({accounts:ACCOUNTS, holdings:HOLDINGS, theme:state.theme, defAcct:state.defAcct, pxAt:state.pxAt})); }
   catch(e){}
 }
 function acctById(id){ for(var i=0;i<ACCOUNTS.length;i++) if(ACCOUNTS[i].id===id) return ACCOUNTS[i];
@@ -1082,7 +1086,7 @@ function renderPortfolio(){
   el("holdingsList").innerHTML += '<button class="row" data-sheet="holding"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add a holding</div></div><div class="chev"></div></button>';
   el("holdingsList").dataset.scope = state.acct;
 
-  el("updatedAt").textContent = "Updated " + state.updated.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+  el("updatedAt").textContent = updatedText();
   state.scrubIndex = null;
   paintHero();
 }
@@ -1242,6 +1246,16 @@ function renderSettings(){
     fieldSelect("setDefAcct", "Default account", acctOptions(), ACCOUNTS.some(function(a){ return a.id === state.defAcct; }) ? state.defAcct : ACCOUNTS[0].id) : "";
   if (ACCOUNTS.length) el("setDefAcct").addEventListener("change", function(){ state.defAcct = this.value; save(); });
 
+  var key = pxKey();
+  el("pxCard").innerHTML =
+    '<div class="row"><div class="row-main"><div class="row-t">Crypto</div>'+
+    '<div class="row-s">From CoinGecko, no key needed</div></div></div>'+
+    '<button class="row" data-sheet="pxkey"><div class="row-main"><div class="row-t">Stocks and funds</div>'+
+    '<div class="row-s">'+(key ? 'From Finnhub, with your key' : 'Add a free Finnhub key to update these')+'</div></div>'+
+    '<div class="row-r"><div class="row-v">'+(key ? 'On' : 'Off')+'</div></div><div class="chev"></div></button>'+
+    '<div class="row"><div class="row-main"><div class="row-t">Last updated</div></div>'+
+    '<div class="row-r"><div class="row-v">'+(state.pxAt ? when(state.pxAt) : 'Never')+'</div></div></div>';
+
   el("themeSeg").innerHTML = [["system","System"],["light","Light"],["dark","Dark"]].map(function(t){
     return '<button data-settheme="'+t[0]+'"'+(state.theme===t[0]?' class="on"':'')+'>'+t[1]+'</button>';
   }).join("");
@@ -1262,6 +1276,110 @@ function renderSettings(){
     '<button class="row" data-reset="example"><div class="row-main">'+
     '<div class="row-t" style="color:var(--neg)">Reset to the example portfolio</div>'+
     '<div class="row-s">Replaces everything with sample accounts</div></div></button>';
+}
+
+/* ========================= live prices ========================= */
+/* Crypto comes from CoinGecko, which needs no key. Stocks and funds come from
+   Finnhub, which needs a free one, pasted into Settings and kept on this
+   device. A price that cannot be fetched keeps the one it had, and "Updated"
+   moves only when prices really arrived. Cash and things with no market are
+   never asked about. */
+var PX_KEY = "basis.finnhub";
+function pxKey(){ try { return localStorage.getItem(PX_KEY) || ""; } catch(e){ return ""; } }
+function setPxKey(k){ try { if (k) localStorage.setItem(PX_KEY, k); else localStorage.removeItem(PX_KEY); } catch(e){} }
+function getJSON(url){
+  var c = window.AbortController ? new AbortController() : null;
+  var t = setTimeout(function(){ if (c) c.abort(); }, 10000);
+  return fetch(url, c ? {cache:"no-store", signal:c.signal} : {cache:"no-store"})
+    .then(function(r){ clearTimeout(t); if (!r.ok) throw new Error(String(r.status)); return r.json(); },
+          function(e){ clearTimeout(t); throw e; });
+}
+function quoteStock(sym, key){
+  return getJSON("https://finnhub.io/api/v1/quote?symbol="+encodeURIComponent(sym)+"&token="+encodeURIComponent(key))
+    .then(function(q){ return q && q.c > 0 ? {p:q.c, d:+q.dp || 0} : null; });
+}
+function priced(h){ return !OFF[h.cls] && h.cls !== "cash" && !!h.tick; }
+function stocksHeld(){ return HOLDINGS.some(function(h){ return priced(h) && h.cls !== "crypto"; }); }
+/* today's prices show a time, older ones a date */
+function when(at){
+  var d = new Date(at);
+  return d.toDateString() === new Date().toDateString()
+    ? d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})
+    : d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+}
+function updatedText(){
+  if (!HOLDINGS.some(priced)) return "";
+  if (!state.pxAt) return "Prices not updated";
+  return (stocksHeld() && !pxKey() ? "Crypto updated " : "Updated ") + when(state.pxAt);
+}
+var pxBusy = null;
+/* resolves once every price it can reach is in. `loud` is a pull to refresh:
+   it says when something did not update, which a quiet launch does not. */
+function refreshPrices(loud){
+  if (pxBusy) return pxBusy;
+  var key = pxKey(), hs = HOLDINGS.filter(priced), coins = {}, stocks = {}, got = {}, jobs = [];
+  hs.forEach(function(h){
+    var t = h.tick.toUpperCase();
+    if (h.cls === "crypto") coins[t] = 1; else if (key) stocks[t] = 1;
+  });
+  var cs = Object.keys(coins);
+  if (cs.length) jobs.push(getJSON("https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&include_24hr_change=true&symbols="+
+      encodeURIComponent(cs.join(",").toLowerCase()))
+    .then(function(d){ Object.keys(d || {}).forEach(function(k){
+      var q = d[k]; if (q && q.usd > 0) got["c:"+k.toUpperCase()] = {p:q.usd, d:+q.usd_24h_change || 0}; }); })
+    .catch(function(){}));
+  Object.keys(stocks).forEach(function(t){
+    jobs.push(quoteStock(t, key).then(function(q){ if (q) got["s:"+t] = q; }).catch(function(){}));
+  });
+  pxBusy = Promise.all(jobs).then(function(){
+    pxBusy = null;
+    var want = 0, n = 0, missed = {};
+    hs.forEach(function(h){
+      if (h.cls !== "crypto" && !key) return;
+      want++;
+      var q = got[(h.cls === "crypto" ? "c:" : "s:") + h.tick.toUpperCase()];
+      if (q){ h.price = q.p; h.day = q.d; n++; } else missed[h.tick.toUpperCase()] = 1;
+    });
+    if (n){ state.pxAt = Date.now(); save(); }
+    renderAll();
+    if (!loud) return;
+    var miss = Object.keys(missed);
+    if (want && !n) toast("Couldn’t reach prices. Check your connection.");
+    else if (miss.length) toast("No price for " + miss.slice(0,3).join(", ") + (miss.length > 3 ? " and " + (miss.length-3) + " more" : ""));
+    else if (stocksHeld() && !key) toast("Stocks need a free key", function(){ sheetPxKey(); }, "Add");
+  });
+  return pxBusy;
+}
+function sheetPxKey(){
+  var had = pxKey();
+  var html = '<div class="err" id="fErr" role="alert"></div>'+
+    '<div class="card" style="margin-top:var(--s-2)">'+
+    fieldText("fPxKey","Key","Paste your key", had)+
+    '</div>'+
+    '<div class="note">Finnhub gives a free key for stock and fund prices. Sign up at '+
+    '<a href="https://finnhub.io/register" target="_blank" rel="noopener" style="color:var(--accent)">finnhub.io</a>, '+
+    'then copy the API key from your dashboard and paste it here. It stays on this device.</div>'+
+    (had ? '<button class="btn warn" id="fPxDel">Remove key</button>' : '');
+  function commit(){
+    var k = el("fPxKey").value.trim();
+    if (!k){ setPxKey(""); renderAll(); closeSheet(); return; }
+    el("sheetClose").disabled = true;
+    /* try it on one fund before keeping it, so a typo shows up here and not
+       as stocks that quietly never move */
+    quoteStock("SPY", k).then(function(q){
+      if (!q) throw new Error("empty");
+      setPxKey(k); closeSheet(); toast("Key saved"); refreshPrices(true);
+    }).catch(function(e){
+      el("sheetClose").disabled = false;
+      formError(/401|403/.test(String(e && e.message)) ? "That key didn’t work. Check it and paste it again."
+                                                   : "Couldn’t check the key. Check your connection.");
+    });
+  }
+  openSheet("Stock prices", html, function(){
+    if (had) el("fPxDel").addEventListener("click", function(){
+      setPxKey(""); renderAll(); closeSheet(); toast("Key removed");
+    });
+  }, {label:"Save", save:commit});
 }
 
 /* ========================= sheets ========================= */
@@ -2512,8 +2630,9 @@ document.addEventListener("click", function(e){
             : "Every account and holding you have entered is removed and the example portfolio comes back. This cannot be undone.",
       empty ? "Remove everything" : "Reset everything", function(){
         ACCOUNTS = empty ? [] : clone(SEED_ACCOUNTS); HOLDINGS = empty ? [] : clone(SEED_HOLDINGS);
-        state.acct = "all"; state.bAcct = "all"; save(); renderAll();
+        state.acct = "all"; state.bAcct = "all"; state.pxAt = 0; save(); renderAll();
         toast(empty ? "Portfolio cleared" : "Reset to the example portfolio");
+        if (!empty) refreshPrices();
       });
     return;
   }
@@ -2527,6 +2646,7 @@ document.addEventListener("click", function(e){
     else if (which==="say") sheetSay();
     else if (which==="scan") sheetScan();
     else if (which==="about") sheetAbout();
+    else if (which==="pxkey") sheetPxKey();
     return;
   }
 });
@@ -2613,11 +2733,14 @@ window.addEventListener("scroll", syncTopbars, {passive:true});
     p.style.transition = "";
     if (parseFloat(p.style.height) >= THRESH){
       p.classList.add("busy"); p.style.height = "44px"; label(p, "Updating");
-      setTimeout(function(){
-        state.updated = new Date();
-        renderAll();
-        p.classList.remove("busy"); p.style.height = "0px"; label(p, "Pull to refresh");
-      }, 650);
+      /* the spinner stays until the prices are in, and a little longer if
+         they come back faster than it can be read */
+      var t0 = Date.now();
+      refreshPrices(true).then(function(){
+        setTimeout(function(){
+          p.classList.remove("busy"); p.style.height = "0px"; label(p, "Pull to refresh");
+        }, Math.max(0, 650 - (Date.now() - t0)));
+      });
     } else {
       p.style.height = "0px";
     }
@@ -2630,6 +2753,11 @@ applyTheme();
 renderAll();
 bindChart();
 setTab("portfolio");
+refreshPrices();
+/* back from the background after a while, the prices are old again */
+document.addEventListener("visibilitychange", function(){
+  if (document.visibilityState === "visible" && Date.now() - state.pxAt > 5*60e3) refreshPrices();
+});
 window.addEventListener("resize", function(){ if(state.tab==="portfolio") paintHero(); });
 
 /* the worker fetches network-first, so a reload is always the newest page.
