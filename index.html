@@ -21,7 +21,7 @@ html,body{margin:0;padding:0}
 :root{
   --bg:#f2f2f7; --surface:#fdfdfb; --surface-2:#f6f6f8; --surface-3:#ececf0;
   --sep:rgba(60,60,67,.13); --sep-strong:rgba(60,60,67,.22);
-  --label:#000; --label-2:rgba(60,60,67,.78); --label-3:rgba(60,60,67,.56);
+  --label:#000; --label-2:rgba(60,60,67,.78); --label-3:rgba(60,60,67,.56); --placeholder:rgba(60,60,67,.3);
   /* label-2 split into an opaque colour and an alpha, for line icons whose
      strokes cross: opacity on the whole icon blends once, rgba blends per stroke */
   --label-2-rgb:rgb(60,60,67); --label-2-a:.78;
@@ -66,7 +66,7 @@ html,body{margin:0;padding:0}
   :root:not([data-theme="light"]){
     --bg:#000; --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
     --sep:rgba(84,84,88,.42); --sep-strong:rgba(84,84,88,.65);
-    --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55); --label-2-rgb:rgb(235,235,245); --label-2-a:.62;
+    --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55); --placeholder:rgba(235,235,245,.3); --label-2-rgb:rgb(235,235,245); --label-2-a:.62;
     --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
     --chrome:rgba(24,24,26,.76); --float-shadow:0 8px 24px rgba(0,0,0,.55);
     --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
@@ -84,7 +84,7 @@ html,body{margin:0;padding:0}
 :root[data-theme="dark"]{
   --bg:#000; --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
   --sep:rgba(84,84,88,.42); --sep-strong:rgba(84,84,88,.65);
-  --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55); --label-2-rgb:rgb(235,235,245); --label-2-a:.62;
+  --label:#fff; --label-2:rgba(235,235,245,.62); --label-3:rgba(235,235,245,.55); --placeholder:rgba(235,235,245,.3); --label-2-rgb:rgb(235,235,245); --label-2-a:.62;
   --accent:#7d7aff; --accent-fill:#5e5ce6; --pos:#30d158; --neg:#ff453a;
   --chrome:rgba(24,24,26,.76); --float-shadow:0 8px 24px rgba(0,0,0,.55);
   --c-blue:#006daf; --c-teal:#00a3cc; --c-orange:#d57a00; --c-purple:#c155ff;
@@ -301,7 +301,8 @@ button.row:active{background:var(--surface-2)}
   -webkit-appearance:none;appearance:none;padding:0;min-height:48px;
 }
 .field select{text-align-last:right;color:var(--label)}
-.field input::placeholder{color:var(--label-3)}
+/* Apple's placeholderText: faint enough that an example never reads as an entry */
+.field input::placeholder,textarea.box::placeholder{color:var(--placeholder)}
 textarea.box{
   width:100%;min-height:136px;background:var(--surface);border:0;border-radius:var(--r-md);
   padding:var(--s-5);font-family:var(--mono);font-size:var(--t-body);line-height:1.5;outline:none;resize:vertical;
@@ -541,7 +542,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 24</div>
+      <div class="foot">Build 25</div>
     </div>
   </section>
 
