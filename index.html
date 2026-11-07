@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=28">
+<link rel="apple-touch-icon" href="icon-180.png?v=29">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -542,7 +542,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 28</div>
+      <div class="foot">Build 29</div>
     </div>
   </section>
 
@@ -1430,10 +1430,40 @@ function formError(msg){
 }
 /* caps: how the keyboard capitalises - "characters" for a ticker, "words" for
    a name. Nothing here is prose, so nothing autocorrects. */
+function num(t){ return parseFloat(String(t).replace(/,/g, "")); }
+/* commas into the whole-number part, the rest left exactly as typed */
+function grp(t){
+  var m = /^(-?)(\d*)(\.\d*)?$/.exec(String(t).replace(/,/g, ""));
+  return m ? m[1]+m[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",")+(m[3]||"") : String(t);
+}
+/* regroup while typing; capture phase, so every field's own input listener
+   already sees the regrouped value. The caret keeps its place among the
+   characters that are not commas. */
+document.addEventListener("input", function(e){
+  var f = e.target;
+  if (!f.classList || !f.classList.contains("num")) return;
+  var v = f.value, at = f.selectionStart == null ? v.length : f.selectionStart;
+  var keep = v.slice(0, at).replace(/[^0-9.\-]/g, "").length;
+  var clean = v.replace(/[^0-9.\-]/g, "");
+  clean = clean.charAt(0) + clean.slice(1).replace(/-/g, "");
+  var dot = clean.indexOf(".");
+  if (dot > -1) clean = clean.slice(0, dot+1) + clean.slice(dot+1).replace(/\./g, "");
+  var out = grp(clean);
+  if (out === v) return;
+  f.value = out;
+  var i = 0, seen = 0;
+  while (i < out.length && seen < keep){ if (out[i] !== ",") seen++; i++; }
+  f.setSelectionRange(i, i);
+}, true);
+/* A "number" field is really a text field with the decimal keypad: a
+   type=number input cannot show 3,180, and grouping is what makes a large
+   figure readable. num() reads it back with the commas taken out. */
 function fieldText(id,label,ph,value,type,caps){
+  var n = type==="number";
+  value = value===undefined ? "" : value;
   return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label>'+
-    '<input id="'+id+'" type="'+(type||"text")+'" placeholder="'+esc(ph)+'" value="'+esc(value===undefined?"":value)+'"'+
-    (type==="number"?' inputmode="decimal"':'')+
+    '<input id="'+id+'" type="text"'+(n?' class="num"':'')+' placeholder="'+esc(n?grp(ph):ph)+'" value="'+esc(n?grp(String(value)):value)+'"'+
+    (n?' inputmode="decimal"':'')+
     ' autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="'+(caps||"off")+'"></div>';
 }
 function fieldSwitch(id,label,on){
@@ -1527,8 +1557,8 @@ function sheetHolding(preset, edit, acct){
     fieldText("fName2","Name","Vanguard Total Stock Market", edit ? edit.name : "", "text", "words")+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     fieldText("fSh","Shares","100", edit && !OFF[edit.cls] ? String(edit.shares) : "","number")+
-    fieldText("fPx","Price now","312.44", edit ? String(abs(edit.price)) : "","number")+
-    fieldText("fCb","Cost per share","214.80", edit ? String(abs(edit.cost)) : "","number")+
+    fieldText("fPx","Price now","312.44", edit ? String(+abs(edit.price).toFixed(4)) : "","number")+
+    fieldText("fCb","Cost per share","214.80", edit ? String(+abs(edit.cost).toFixed(4)) : "","number")+
     fieldText("fBought","First bought","", edit && edit.bought ? edit.bought : "","date")+
     fieldText("fY","Yield %","1.21", edit && edit.yield ? String(edit.yield) : "","number")+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
@@ -1537,8 +1567,8 @@ function sheetHolding(preset, edit, acct){
     '</div>'+(edit ? '<button class="btn warn" id="fDel">Remove holding</button>' : '');
   function commit(){
     var tick = el("fTick").value.trim().toUpperCase();
-    var sh = parseFloat(el("fSh").value), px = parseFloat(el("fPx").value);
-    var cb = parseFloat(el("fCb").value), y = parseFloat(el("fY").value);
+    var sh = num(el("fSh").value), px = num(el("fPx").value);
+    var cb = num(el("fCb").value), y = num(el("fY").value);
     var kind = el("fCls").value;
     if (OFF[kind]){
       var label = el("fName2").value.trim();
@@ -1604,9 +1634,9 @@ function sheetHolding(preset, edit, acct){
     }
     el("fCls").addEventListener("change", sync); sync();
   }, {label: edit ? "Save" : "Add", save: commit, ready: function(){
-    var px = Math.abs(parseFloat(el("fPx").value)) > 0;
+    var px = Math.abs(num(el("fPx").value)) > 0;
     if (OFF[el("fCls").value]) return el("fName2").value.trim() !== "" && px;
-    return el("fTick").value.trim() !== "" && parseFloat(el("fSh").value) > 0 && px;
+    return el("fTick").value.trim() !== "" && num(el("fSh").value) > 0 && px;
   }});
 }
 
@@ -1665,7 +1695,7 @@ function sheetBuy(h){
     fieldText("fBuyPx","Price per share", h.price.toFixed(2),"","number")+
     '</div><div class="note" id="fBuyNote"></div>';
   function read(){
-    var n = parseFloat(el("fBuySh").value), px = parseFloat(el("fBuyPx").value);
+    var n = num(el("fBuySh").value), px = num(el("fBuyPx").value);
     if (!(px > 0)) px = h.price;
     if (!(n > 0)) return null;
     var sh = h.shares + n;
@@ -1706,8 +1736,8 @@ function sheetSell(h){
     fieldText("fSellPx","Sold at", h.price.toFixed(2),"","number")+
     '</div><div class="note" id="fSellNote"></div>';
   function read(){
-    return {act:"sell", tick:h.tick, acct:h.acct, shares:parseFloat(el("fSellSh").value),
-            price:parseFloat(el("fSellPx").value), cash:el("fSellCash").checked};
+    return {act:"sell", tick:h.tick, acct:h.acct, shares:num(el("fSellSh").value),
+            price:num(el("fSellPx").value), cash:el("fSellCash").checked};
   }
   function preview(){
     var c = read(), left = h.shares - c.shares;
@@ -2292,7 +2322,7 @@ function sheetSayCheck(rows, text){
   }).join("") + '<button class="btn ghost" id="vBack" style="margin-top:var(--s-7)">Back</button>';
   function read(i){
     return {act:el("vA"+i).value, tick:el("vT"+i).value.trim().toUpperCase(),
-      shares:parseFloat(el("vN"+i).value), acct:el("vC"+i).value, price:parseFloat(el("vP"+i).value),
+      shares:num(el("vN"+i).value), acct:el("vC"+i).value, price:num(el("vP"+i).value),
       cash:el("vK"+i).checked};
   }
   function sync(i){
@@ -2303,7 +2333,7 @@ function sheetSayCheck(rows, text){
     el("wrap-vP"+i).style.display = c.act === "skip" || (sell && !c.cash) ? "none" : "";
     el("wrap-vK"+i).style.display = sell ? "" : "none";
     document.querySelector('label[for="vP'+i+'"]').textContent = sell ? "Sold at" : "Price each";
-    el("vP"+i).placeholder = cur ? cur.price.toFixed(2) : "";
+    el("vP"+i).placeholder = cur ? grp(cur.price.toFixed(2)) : "";
     ["wrap-vT","wrap-vN","wrap-vC"].forEach(function(w){ el(w+i).style.display = c.act === "skip" ? "none" : ""; });
     el("vS"+i).textContent = o.msg;
     el("vS"+i).classList.toggle("bad", !o.ok);
