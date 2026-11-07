@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=33">
+<link rel="apple-touch-icon" href="icon-180.png?v=34">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -545,7 +545,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 33</div>
+      <div class="foot">Build 34</div>
     </div>
   </section>
 
@@ -1135,17 +1135,13 @@ function buckets(hs, keyFn, metaFn){
   return out;
 }
 
-/* A breakdown needs at least two things to break down. With one, the bar is
-   always 100% and says nothing the line above it did not; with none, the
-   section is about something this account does not hold. Neither earns a
-   card, so one of these decides it for every breakdown below. */
+/* A section about something this account does not hold is hidden. One with
+   a single entry still shows it, as one full bar, so every card reads the
+   same way. */
 function bdSect(key, on){
   var n = document.querySelector('[data-bd="'+key+'"]');
   if (n) n.hidden = !on;
   return on;
-}
-function allOfIt(label){
-  return '<div class="empty in">All of it is '+esc(label)+'.</div>';
 }
 
 /* how many sectors show before "Show all" - not saved, it resets on reload */
@@ -1157,10 +1153,8 @@ function renderBreakdown(){
   /* asset class - biggest to smallest */
   var classes = buckets(hs, function(h){ var o={}; o[h.cls]=val(h); return o; });
   bdSect("class", classes.length > 0);
-  el("classStack").hidden = classes.length < 2;
-  el("classBars").innerHTML = classes.length < 2
-    ? (classes.length ? allOfIt(CLASS_META[classes[0].key].label) : "")
-    : classes.map(function(b){
+  el("classStack").hidden = !classes.length;
+  el("classBars").innerHTML = classes.map(function(b){
         return barRow(CLASS_META[b.key].label, b.value, b.value/total, CLASS_META[b.key].color);
       }).join("");
   el("classStack").innerHTML = classes.map(function(b){
@@ -1187,10 +1181,9 @@ function renderBreakdown(){
   });
   if (bdSect("sector", sec.length > 0)){
     var shown = sec.length > SECTOR_TOP && !sectorsAll ? sec.slice(0, SECTOR_TOP) : sec;
-    el("sectorBars").innerHTML = sec.length > 1 ? shown.map(function(b){
+    el("sectorBars").innerHTML = shown.map(function(b){
       return barRow(b.key, b.value, b.value/eqTotal);
-    }).join("")
-      : allOfIt(sec[0].key);
+    }).join("");
     el("sectorMore").innerHTML = sec.length > SECTOR_TOP
       ? '<button class="more" data-sectors>'+(sectorsAll ? "Show fewer" : "Show all "+sec.length+" sectors")+'</button>' : "";
   }
@@ -1204,9 +1197,9 @@ function renderBreakdown(){
   function regionLabel(k){ return (REGION_META[k] || {label:k}).label; }
   var showRegion = reg.length > 0;
   if (bdSect("region", showRegion)){
-    el("regionBars").innerHTML = reg.length > 1 ? reg.map(function(b){
+    el("regionBars").innerHTML = reg.map(function(b){
       return barRow(regionLabel(b.key), b.value, b.value/eqTotal);
-    }).join("") : allOfIt(regionLabel(reg[0].key));
+    }).join("");
   }
 
   /* crypto categories */
@@ -1214,9 +1207,9 @@ function renderBreakdown(){
   var crTotal = sum(cr, val) || 1;
   var cats = buckets(cr, function(h){ var o={}; o[h.cat || "Other crypto"] = val(h); return o; });
   if (bdSect("crypto", cats.length > 0)){
-    el("cryptoBars").innerHTML = cats.length > 1 ? cats.map(function(b){
+    el("cryptoBars").innerHTML = cats.map(function(b){
       return barRow(b.key, b.value, b.value/crTotal);
-    }).join("") : allOfIt(cats[0].key);
+    }).join("");
   }
 
   /* leaders and laggards by return since purchase */
