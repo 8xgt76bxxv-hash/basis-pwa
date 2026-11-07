@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=30">
+<link rel="apple-touch-icon" href="icon-180.png?v=31">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -542,7 +542,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 30</div>
+      <div class="foot">Build 31</div>
     </div>
   </section>
 
@@ -1466,6 +1466,24 @@ function fieldText(id,label,ph,value,type,caps){
     (n?' inputmode="decimal"':'')+
     ' autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="'+(caps||"off")+'"></div>';
 }
+/* a switch in a form leaves the keyboard where it is, as a native one does:
+   letting the tap take focus dropped the keyboard on every flip, and the
+   sheet fell and rose with it. Stopping mousedown keeps focus put; the click
+   that flips the switch still arrives. */
+document.addEventListener("mousedown", function(e){
+  var f = e.target.closest && e.target.closest(".field");
+  if (f && f.querySelector("input.sw")) e.preventDefault();
+}, true);
+/* the label would hand focus to the switch, which drops the keyboard just the
+   same, so it flips the switch itself */
+document.addEventListener("click", function(e){
+  var l = e.target.closest && e.target.closest("label[for]");
+  var sw = l && document.getElementById(l.htmlFor);
+  if (!sw || !sw.classList.contains("sw")) return;
+  e.preventDefault();
+  sw.checked = !sw.checked;
+  sw.dispatchEvent(new Event("change", {bubbles:true}));
+}, true);
 function fieldSwitch(id,label,on){
   return '<div class="field" id="wrap-'+id+'"><label for="'+id+'">'+label+'</label><span class="sw-gap"></span>'+
     '<input id="'+id+'" type="checkbox" role="switch" class="sw"'+(on?" checked":"")+'></div>';
