@@ -513,7 +513,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
       <div class="sect">Accounts</div>
       <div class="card" id="acctManage"></div>
       <div class="card">
-        <button class="row" data-sheet="account"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add an account</div></div><div class="chev"></div></button>
+        <button class="row" data-sheet="account" style="min-height:48px"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add an account</div></div><div class="chev"></div></button>
       </div>
       <div class="card" id="defAcctCard"></div>
 
@@ -536,7 +536,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 22</div>
+      <div class="foot">Build 23</div>
     </div>
   </section>
 
@@ -1529,7 +1529,7 @@ function sheetHolding(preset, edit, acct){
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     fieldSelect("fSec","Sector", secOpts, spread ? "__keep" : edit && edit.mix ? Object.keys(edit.mix)[0] : "")+
     fieldSelect("fCat","Category", catOpts, edit && edit.cat ? edit.cat : "Store of Value")+
-    '</div>';
+    '</div>'+(edit ? '<button class="btn warn" id="fDel">Remove holding</button>' : '');
   function commit(){
     var tick = el("fTick").value.trim().toUpperCase();
     var sh = parseFloat(el("fSh").value), px = parseFloat(el("fPx").value);
@@ -1580,6 +1580,7 @@ function sheetHolding(preset, edit, acct){
             preset ? "Something you own" : "New holding", html, function(){
     function relabel(id,txt){ var l = document.querySelector('label[for="'+id+'"]'); if(l) l.textContent = txt; }
     if (el("fSayIt")) el("fSayIt").addEventListener("click", function(){ sheetSay("", el("fAcct").value); });
+    if (el("fDel")) el("fDel").addEventListener("click", function(){ removeHolding(edit, OFF[edit.cls] ? edit.name : edit.tick); });
     function sync(){
       var c = el("fCls").value, off = !!OFF[c];
       el("wrap-fSec").style.display = (c==="us_stock"||c==="intl_stock"||c==="real_estate") ? "" : "none";
@@ -1613,11 +1614,9 @@ function sheetOffDetail(h){
     line(h.cls==="loan" ? "Balance owed" : "Worth today", money(worth))+
     line("What you paid", money(paid))+
     line("Change", '<span class="'+tone(signed(g))+'">'+signed(g)+'</span>')+
-    '</div><button class="btn ghost" id="offEdit">Edit</button>'+
-    '<button class="btn warn" id="offDel">Remove</button>',
+    '</div><button class="btn ghost" id="offEdit">Edit</button>',
     function(){
       el("offEdit").addEventListener("click", function(){ sheetHolding(null, h); });
-      el("offDel").addEventListener("click", function(){ removeHolding(h, h.name); });
     });
 }
 
@@ -1645,12 +1644,10 @@ function sheetHoldDetail(idx){
     (h.cat ? line("Category", esc(h.cat)) : "")+
     '</div>'+(h.cls==="cash" ? "" : '<button class="btn ghost" id="fBuy">Record a buy</button>'+
                             '<button class="btn ghost" id="fSell">Record a sale</button>')+
-    '<button class="btn ghost" id="fEdit">Edit holding</button>'+
-    '<button class="btn warn" id="fDel">Remove holding</button>', function(){
+    '<button class="btn ghost" id="fEdit">Edit holding</button>', function(){
       if (el("fBuy")) el("fBuy").addEventListener("click", function(){ sheetBuy(h); });
       if (el("fSell")) el("fSell").addEventListener("click", function(){ sheetSell(h); });
       el("fEdit").addEventListener("click", function(){ sheetHolding(null, h); });
-      el("fDel").addEventListener("click", function(){ removeHolding(h, h.tick); });
     });
 }
 
@@ -2331,16 +2328,8 @@ function sheetSayCheck(rows, text){
 function sheetAbout(){
   openSheet("About",
     '<div class="card" style="margin-top:var(--s-2)">'+
-    '<div class="row"><div class="row-main"><div class="row-t">What this is</div>'+
-    '<div class="row-s" style="white-space:normal">Every account you own, in one place.</div></div></div>'+
-    '<div class="row"><div class="row-main"><div class="row-t">Where the numbers come from</div>'+
-    '<div class="row-s" style="white-space:normal">An example portfolio. Price history is generated, anchored to each '+
-    'holding’s cost and current price.</div></div></div>'+
     '<div class="row"><div class="row-main"><div class="row-t">Your data</div>'+
-    '<div class="row-s" style="white-space:normal">Anything you add is kept in this browser on this device. '+
-    'Nothing is uploaded.</div></div></div>'+
-    '<div class="row"><div class="row-main"><div class="row-t">Sectors</div>'+
-    '<div class="row-s" style="white-space:normal">11 GICS sectors, looked through from each fund’s published weights.</div></div></div>'+
+    '<div class="row-s" style="white-space:normal">Everything you add stays on this device. Nothing is uploaded.</div></div></div>'+
     '</div>');
 }
 
