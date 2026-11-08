@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=38">
+<link rel="apple-touch-icon" href="icon-180.png?v=39">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -556,7 +556,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 38</div>
+      <div class="foot">Build 39</div>
     </div>
   </section>
 
@@ -1107,7 +1107,8 @@ function renderPortfolio(){
   }).join("");
   syncTodayCard();
 
-  /* holdings, biggest first */
+  /* holdings, biggest first. No chevron: a row opens a sheet over this page,
+     it does not push a new one, and iOS keeps the arrow for that */
   var sorted = hs.slice().sort(function(a,b){ return val(b)-val(a); });
   el("holdingsList").innerHTML = sorted.length ? sorted.map(function(h,i){
     var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0, gTxt = pct(gp,1);
@@ -1125,10 +1126,10 @@ function renderPortfolio(){
       (named?"":' <span class="dim" style="font-weight:400">'+esc(h.name)+'</span>')+'</div>'+
       '<div class="row-s">'+esc(sub)+'</div></div>'+
       '<div class="row-r"><div class="row-v num">'+money(val(h))+'</div>'+
-      '<div class="row-d num '+tone(gTxt)+'">'+gTxt+'</div></div><div class="chev"></div></button>';
+      '<div class="row-d num '+tone(gTxt)+'">'+gTxt+'</div></div></button>';
   }).join("") : '<div class="empty">Nothing in this account yet.</div>';
   /* the form picks up whichever account chip is on */
-  el("holdingsList").innerHTML += '<button class="row" data-sheet="holding"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add a holding</div></div><div class="chev"></div></button>';
+  el("holdingsList").innerHTML += '<button class="row" data-sheet="holding"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add a holding</div></div></button>';
   el("holdingsList").dataset.scope = state.acct;
 
   el("updatedAt").textContent = updatedText();
