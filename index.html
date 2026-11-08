@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=37">
+<link rel="apple-touch-icon" href="icon-180.png?v=38">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -341,7 +341,13 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
 
 /* ---------- tab bar ---------- */
 .tabbar{
-  position:fixed;left:var(--rail);right:var(--rail);bottom:var(--tabbar-lift);z-index:60;max-width:400px;margin:0 auto;
+  /* pinned from the top of the large viewport, not the bottom: iOS nudges the
+     bottom edge of the layout viewport by a pixel or two while a scroll is in
+     flight, and a bar hung from it shivered with every frame */
+  position:fixed;left:var(--rail);right:var(--rail);z-index:60;max-width:400px;margin:0 auto;
+  bottom:var(--tabbar-lift);
+  top:calc(100lvh - var(--tabbar) - var(--tabbar-lift));bottom:auto;height:var(--tabbar);box-sizing:border-box;
+  will-change:transform;contain:layout paint;
   background:var(--chrome);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
   border:.5px solid var(--sep-strong);border-radius:var(--r-pill);box-shadow:var(--float-shadow);
   padding:var(--s-2);
@@ -543,13 +549,14 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
 
       <div class="sect">Data</div>
       <div class="card" id="dataCard"></div>
+      <input type="file" id="backupFile" accept=".json,application/json" hidden>
       <div class="card">
         <button class="row" data-sheet="about"><div class="row-main"><div class="row-t">About Basis</div></div><div class="chev"></div></button>
         <button class="row" id="reloadApp"><div class="row-main"><div class="row-t" style="color:var(--accent)">Reload Basis</div>
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 37</div>
+      <div class="foot">Build 38</div>
     </div>
   </section>
 
@@ -1106,8 +1113,7 @@ function renderPortfolio(){
     var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0, gTxt = pct(gp,1);
     /* the same fund can sit in two accounts - across all of them, say which */
     /* how many you hold, and nothing else: the price is in the row's sheet */
-    var qty = h.shares.toLocaleString("en-US",{maximumFractionDigits:4})+" "+
-      (h.cls==="crypto" ? h.tick.toUpperCase() : h.shares===1 ? "share" : "shares");
+    var qty = h.shares.toLocaleString("en-US",{maximumFractionDigits:4});
     var off = !!OFF[h.cls], named = off || h.cls==="cash";
     var sub = off ? CLASS_META[h.cls].label
             : h.cls==="cash" ? acctById(h.acct).name
@@ -1305,6 +1311,12 @@ function renderSettings(){
   el("dataCard").innerHTML =
     '<div class="row"><div class="row-main"><div class="row-t">Holdings stored</div></div>'+
     '<div class="row-r"><div class="row-v num">'+HOLDINGS.length+' holding'+(HOLDINGS.length===1?"":"s")+'</div></div></div>'+
+    '<button class="row" id="backupSave"><div class="row-main">'+
+    '<div class="row-t" style="color:var(--accent)">Export a backup</div>'+
+    '<div class="row-s">Save a file to iCloud Drive or Files</div></div></button>'+
+    '<button class="row" id="backupLoad"><div class="row-main">'+
+    '<div class="row-t" style="color:var(--accent)">Restore from a backup</div>'+
+    '<div class="row-s">Replaces what is here with the file’s accounts and holdings</div></div></button>'+
     '<button class="row" data-reset="empty"><div class="row-main">'+
     '<div class="row-t" style="color:var(--neg)">Start empty</div>'+
     '<div class="row-s">Removes every account and holding</div></div></button>'+
@@ -1788,6 +1800,70 @@ function toast(msg, undo, act, sticky){
   }
   t.classList.add("on");
 }
+
+/* ========================= backup ========================= */
+/* Everything lives on this phone only. A backup is the same accounts and
+   holdings as a file you keep - in iCloud Drive, say - and can bring back.
+   The price keys stay out of it: they are yours to paste again. */
+function exportBackup(){
+  var d = new Date(), day = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  var body = JSON.stringify({app:"basis", backup:1, saved:d.toISOString(),
+    accounts:ACCOUNTS, holdings:HOLDINGS, theme:state.theme, defAcct:state.defAcct}, null, 1);
+  var name = "basis-backup-"+day+".json", file;
+  try { file = new File([body], name, {type:"application/json"}); } catch(e){ file = null; }
+  /* on iPhone the share sheet is the way to Save to Files */
+  if (file && navigator.canShare && navigator.canShare({files:[file]})){
+    navigator.share({files:[file]}).then(function(){ toast("Backup saved"); })
+      .catch(function(e){ if (!e || e.name !== "AbortError") toast("Couldn’t save the backup"); });
+    return;
+  }
+  var url = URL.createObjectURL(new Blob([body], {type:"application/json"}));
+  var a = document.createElement("a"); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  toast("Backup saved");
+}
+/* a file is only taken if it really is a Basis backup: anything else is
+   turned away before it can replace what is here */
+function readBackup(text){
+  var d = JSON.parse(text);
+  if (!d || d.app !== "basis" || !Array.isArray(d.accounts) || !Array.isArray(d.holdings)) throw new Error("not a backup");
+  var ids = {};
+  d.accounts.forEach(function(a){
+    if (!a || typeof a.id !== "string" || typeof a.name !== "string") throw new Error("bad account");
+    ids[a.id] = 1;
+  });
+  d.holdings.forEach(function(h){
+    if (!h || typeof h.cls !== "string" || !ids[h.acct] || !isFinite(h.shares) || !isFinite(h.price)) throw new Error("bad holding");
+    if (!isFinite(h.cost)) h.cost = h.price;
+    if (!isFinite(h.day)) h.day = 0;
+    if (!isFinite(h.yield)) h.yield = 0;
+  });
+  return d;
+}
+el("backupFile").addEventListener("change", function(){
+  var f = this.files && this.files[0];
+  if (!f) return;
+  var r = new FileReader();
+  r.onload = function(){
+    var d;
+    try { d = readBackup(String(r.result)); }
+    catch(e){ toast("That file isn’t a Basis backup"); return; }
+    var n = d.holdings.length, a = d.accounts.length;
+    var on = d.saved ? new Date(d.saved).toLocaleDateString("en-US",{month:"short", day:"numeric", year:"numeric"}) : "";
+    confirmAction("Restore this backup?",
+      "The backup"+(on ? " from "+on : "")+" has "+a+" account"+(a===1?"":"s")+" and "+n+" holding"+(n===1?"":"s")+
+      ". They replace everything here now. This cannot be undone.",
+      "Restore", function(){
+        ACCOUNTS = d.accounts; HOLDINGS = d.holdings;
+        if (d.theme) state.theme = d.theme;
+        state.defAcct = d.defAcct; state.acct = "all"; state.bAcct = "all"; state.pxAt = 0;
+        save(); renderAll(); toast("Backup restored"); refreshPrices();
+      });
+  };
+  r.onerror = function(){ toast("Couldn’t read that file"); };
+  r.readAsText(f);
+});
 
 /* nothing destructive happens on a single tap: either it is confirmed here,
    or the toast that follows can put it back */
@@ -2895,6 +2971,8 @@ document.addEventListener("click", function(e){
   if ((t = e.target.closest("[data-settheme]")))  { state.theme = t.dataset.settheme; applyTheme(); save(); renderSettings(); return; }
   if ((t = e.target.closest("[data-editacct]")))  { sheetAccount(t.dataset.editacct); return; }
   if ((t = e.target.closest("[data-hold]")))      { sheetHoldDetail(+t.dataset.hold); return; }
+  if (e.target.closest("#backupSave")) { exportBackup(); return; }
+  if (e.target.closest("#backupLoad")) { el("backupFile").value = ""; el("backupFile").click(); return; }
   if ((t = e.target.closest("[data-reset]")))     {
     var empty = t.dataset.reset === "empty";
     confirmAction(empty ? "Start empty?" : "Reset portfolio?",
