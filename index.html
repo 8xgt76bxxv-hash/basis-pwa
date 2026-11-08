@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=35">
+<link rel="apple-touch-icon" href="icon-180.png?v=36">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -545,7 +545,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 35</div>
+      <div class="foot">Build 36</div>
     </div>
   </section>
 
@@ -1563,6 +1563,20 @@ function cgId(t){
       return hit.id;
     });
 }
+function cgIntra(t){
+  function chart(id, days){
+    return patient(CG, function(){ return getJSON("https://api.coingecko.com/api/v3/coins/"+
+      encodeURIComponent(id)+"/market_chart?vs_currency=usd&days="+days); })
+      .then(function(d){ return (d && d.prices || []).map(function(p){ return [p[0], +p[1]]; })
+        .filter(function(p){ return isFinite(p[0]) && p[1] > 0; }); });
+  }
+  return cgId(t).then(function(id){
+    return Promise.all([chart(id, 1), chart(id, 4).catch(function(){ return []; })]);
+  }).then(function(r){
+    var fine = r[0], first = fine.length ? fine[0][0] : Infinity;
+    return r[1].filter(function(p){ return p[0] < first; }).concat(fine);
+  });
+}
 function refreshIntraday(){
   var td = getKey("td"), now = Date.now(), wkend = [0,6].indexOf(new Date().getDay()) >= 0, seen = {};
   HOLDINGS.filter(priced).forEach(function(h){
@@ -1575,12 +1589,15 @@ function refreshIntraday(){
        latest there is */
     if (!crypto && wkend && e && e.t.length && now - e.t[e.t.length-1] < 3*864e5) return;
     intraBusy[k] = 1;
+    /* crypto trades around the clock, so it comes from CoinGecko, which needs
+       no key and does not queue behind the stocks for Twelve Data's eight
+       calls a minute: the last day in 5-minute steps, the days before hourly.
+       Twelve Data is the fallback when there is a key. */
     var job = crypto
-      ? (td ? patient(TD, function(){ return tdIntra(t + "/USD", td, "15min", 400); })
-            : cgId(t).then(function(id){
-                return patient(CG, function(){ return getJSON("https://api.coingecko.com/api/v3/coins/"+
-                  encodeURIComponent(id)+"/market_chart?vs_currency=usd&days=3"); });
-              }).then(function(d){ return (d && d.prices || []).map(function(p){ return [p[0], +p[1]]; }); }))
+      ? cgIntra(t).catch(function(e){
+          if (!td) throw e;
+          return patient(TD, function(){ return tdIntra(t + "/USD", td, "15min", 400); });
+        })
       : patient(TD, function(){ return tdIntra(t, td, "5min", 120); });
     job.then(function(rows){
       if (!rows.length) throw new Error("empty");
