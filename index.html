@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=36">
+<link rel="apple-touch-icon" href="icon-180.png?v=37">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -181,8 +181,11 @@ button.row:active{background:var(--surface-2)}
 #acctManage .row{transition:transform .2s cubic-bezier(.25,.8,.3,1)}
 #acctManage .row.lift{transition:none;z-index:2;background:var(--surface-2);box-shadow:var(--float-shadow);border-radius:var(--r-md)}
 #acctManage .row.lift::before,#acctManage .row.lift+.row::before{opacity:0}
-.chip,.tab,.btn{transition:transform .35s cubic-bezier(.3,1.5,.5,1),background-color .2s,color .2s}
-.chip:active,.tab:active,.btn:active{transform:scale(.96);transition-duration:.1s}
+.chip,.btn{transition:transform .35s cubic-bezier(.3,1.5,.5,1),background-color .2s,color .2s}
+.chip:active,.btn:active{transform:scale(.96);transition-duration:.1s}
+/* a tab bar holds still, as iOS's does: a thumb resting on it while the page
+   scrolls set :active and the spring made the icons jump */
+.tab{transition:background-color .2s,color .2s}
 .topbar-act,.sheet-x,.toast-u{transition:opacity .2s}
 .topbar-act:active,.sheet-x:active,.toast-u:active{opacity:.35;transition:none}
 .seg button{transition:background-color .2s,color .2s,opacity .2s}
@@ -343,6 +346,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
   border:.5px solid var(--sep-strong);border-radius:var(--r-pill);box-shadow:var(--float-shadow);
   padding:var(--s-2);
   display:grid;grid-template-columns:repeat(3,1fr);
+  transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);
 }
 .tab{height:calc(var(--tabbar) - 2*var(--s-2));border-radius:var(--r-pill);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-1);color:var(--label-2)}
 .tab.on{color:var(--accent);background:color-mix(in srgb, var(--accent) 18%, transparent)}
@@ -545,7 +549,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 36</div>
+      <div class="foot">Build 37</div>
     </div>
   </section>
 
@@ -975,7 +979,7 @@ function paintHero(){
 
   /* on 1D the hero already is today - do not print the same number twice */
   var oneDay = state.period === "1D";
-  el("todayTitle").textContent = oneDay ? "What moved today" : "Today";
+  el("todayTitle").textContent = oneDay ? "Top movers" : "Today";
   el("todayValue").hidden = oneDay;
   el("todayPct").hidden = oneDay;
   syncTodayCard();
@@ -1101,7 +1105,9 @@ function renderPortfolio(){
   el("holdingsList").innerHTML = sorted.length ? sorted.map(function(h,i){
     var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0, gTxt = pct(gp,1);
     /* the same fund can sit in two accounts - across all of them, say which */
-    var qty = h.shares.toLocaleString("en-US",{maximumFractionDigits:4})+" × "+usd(h.price,2);
+    /* how many you hold, and nothing else: the price is in the row's sheet */
+    var qty = h.shares.toLocaleString("en-US",{maximumFractionDigits:4})+" "+
+      (h.cls==="crypto" ? h.tick.toUpperCase() : h.shares===1 ? "share" : "shares");
     var off = !!OFF[h.cls], named = off || h.cls==="cash";
     var sub = off ? CLASS_META[h.cls].label
             : h.cls==="cash" ? acctById(h.acct).name
@@ -2773,7 +2779,7 @@ function sheetAbout(){
 var ICONS = {
   portfolio:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17.5l5.2-5.6 3.4 3.1L21 5.5"/><path d="M15.4 5.5H21v5.4"/><path d="M3 21h18"/></svg>',
   breakdown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6V12l6.6 5.2"/></svg>',
-  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M5 17h14"/><circle cx="9.4" cy="7" r="2.4"/><circle cx="14.6" cy="17" r="2.4"/></svg>'
+  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11.4 7H20"/><path d="M4 17h8.6"/><circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="17" r="2.4"/></svg>'
 };
 var TABS = [["portfolio","Portfolio"],["breakdown","Breakdown"],["settings","Settings"]];
 
