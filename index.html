@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=34">
+<link rel="apple-touch-icon" href="icon-180.png?v=35">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -345,7 +345,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
   display:grid;grid-template-columns:repeat(3,1fr);
 }
 .tab{height:calc(var(--tabbar) - 2*var(--s-2));border-radius:var(--r-pill);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-1);color:var(--label-2)}
-.tab.on{color:var(--accent);background:var(--surface-3)}
+.tab.on{color:var(--accent);background:color-mix(in srgb, var(--accent) 18%, transparent)}
 .tab svg{width:var(--s-8);height:var(--s-8);display:block}
 .tab:not(.on) svg{color:var(--label-2-rgb);opacity:var(--label-2-a)}
 .tab span{font-size:var(--t-cap2);font-weight:500;letter-spacing:0}
@@ -545,7 +545,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div class="row-s">Gets the newest version</div></div></button>
       </div>
 
-      <div class="foot">Build 34</div>
+      <div class="foot">Build 35</div>
     </div>
   </section>
 
@@ -667,7 +667,7 @@ var SEED_HOLDINGS = [
 
 /* ========================= helpers ========================= */
 var TODAY = new Date(); TODAY.setHours(0,0,0,0);
-var N_DAYS = 1826, N_INTRA = 79;
+var N_DAYS = 1826, N_INTRA = 289;
 var PERIODS = [
   {k:"1D", n:N_INTRA, label:"today"},
   {k:"1W", n:7,    label:"this week"},
@@ -711,7 +711,7 @@ function el(id){ return document.getElementById(id); }
 /* ========================= state ========================= */
 var KEY = "basis.v2";
 var state = {
-  tab:"portfolio", period:"1M", acct:"all", bAcct:"all",
+  tab:"portfolio", period:"1D", acct:"all", bAcct:"all",
   theme:"system", scrubIndex:null, pxAt:0
 };
 var ACCOUNTS, HOLDINGS;
@@ -782,7 +782,8 @@ function investedSeries(scope, periodKey){
 
 var seriesCache = {};
 function holdingSeries(h, periodKey){
-  var key = h.acct+"|"+h.tick+"|"+h.shares+"|"+h.price+"|"+h.cost+"|"+h.day+"|"+heldDays(h)+"|"+periodKey+"|"+histV;
+  var key = h.acct+"|"+h.tick+"|"+h.shares+"|"+h.price+"|"+h.cost+"|"+h.day+"|"+heldDays(h)+"|"+periodKey+"|"+histV+
+    (periodKey === "1D" ? "|"+intraV+"|"+intraWindow().start+"|"+intraWindow().end : "");
   if (seriesCache[key]) return seriesCache[key];
   var vol = VOL[h.cls] !== undefined ? VOL[h.cls] : .009;
   var out, i;
@@ -806,9 +807,21 @@ function holdingSeries(h, periodKey){
   var real = histFor(h);
   if (periodKey === "1D"){
     var prev = h.day ? h.price/(1+h.day/100) : h.price;
-    /* there is no free source for the minutes in between, so a holding with
-       real prices goes straight from yesterday's close to now */
-    if (real){ out = []; for(i=0;i<N_INTRA;i++) out.push(prev + (h.price-prev)*i/(N_INTRA-1)); }
+    var ie = priced(h) && INTRA[histKey(h)], w = intraWindow();
+    if (ie && ie.t.length){
+      /* the day's real prices, every few minutes, from the start of the
+         window to now. A stock starts at the last close; the market's closed
+         hours hold the last price it traded at. */
+      out = [];
+      for(i=0;i<N_INTRA;i++){
+        var at = w.start + (w.end - w.start)*i/(N_INTRA-1);
+        out.push(i === N_INTRA-1 ? h.price
+          : h.cls !== "crypto" && at <= ie.t[0] ? prev
+          : priceAt(ie, at));
+      }
+    }
+    /* no prices through the day for this one: straight from the last close */
+    else if (real){ out = []; for(i=0;i<N_INTRA;i++) out.push(prev + (h.price-prev)*i/(N_INTRA-1)); }
     else out = walk(h.acct+h.tick+"intra", N_INTRA, vol/7, prev || h.price, h.price);
   } else if (real){
     /* each day's real close, from the day it was bought. Days owned before
@@ -913,9 +926,10 @@ function drawChart(series, invested){
 function periodDef(k){ for(var i=0;i<PERIODS.length;i++) if(PERIODS[i].k===k) return PERIODS[i]; return PERIODS[2]; }
 function dateAt(ix, n){
   if (state.period==="1D"){
-    var mins = 570 + Math.round(ix/(n-1)*390);
-    var dt = new Date(TODAY.getTime()); dt.setHours(0, mins, 0, 0);
-    return dt.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+    var w = intraWindow(), dt = new Date(w.start + (w.end - w.start)*ix/Math.max(1, n-1));
+    var tm = dt.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+    return dt.toDateString() === new Date().toDateString() ? tm
+      : dt.toLocaleDateString("en-US",{weekday:"short"}) + " " + tm;
   }
   var days = periodDef(state.period).n;
   var back = Math.round((1 - ix/(n-1)) * days);
@@ -1376,6 +1390,7 @@ var pxBusy = null, quotedAt = {};
 /* resolves once every price it can reach is in. `loud` is a pull to refresh:
    it says when something did not update, which a quiet launch does not. */
 function refreshPrices(loud){
+  refreshIntraday();
   refreshHistory();
   if (pxBusy) return pxBusy;
   var key = pxKey(), hs = HOLDINGS.filter(priced), coins = {}, stocks = {}, got = {}, jobs = [];
@@ -1491,6 +1506,96 @@ function refreshHistory(){
       /* a symbol the service does not know is not asked about again today */
       HIST[k] = HIST[k] || {t:[], c:[]}; HIST[k].tried = src + today; saveHist();
     }).then(function(){ delete histBusy[k]; });
+  });
+}
+
+/* ---- through the day ----
+   1D runs from the open of the latest stock trading session to now, so on a
+   weekend it is Friday's session and then the quiet since. With no stocks
+   that have prices through the day, it is simply the past 24 hours. Stocks
+   come from Twelve Data in five-minute steps, crypto from Twelve Data or,
+   without its key, CoinGecko. Kept on this device and topped up at most every
+   five minutes. */
+var INTRA_KEY = "basis.intra", INTRA = {}, intraV = 0, intraBusy = {};
+try { INTRA = JSON.parse(localStorage.getItem(INTRA_KEY) || "{}") || {}; } catch(e){ INTRA = {}; }
+function saveIntra(){ try { localStorage.setItem(INTRA_KEY, JSON.stringify(INTRA)); } catch(e){} }
+/* the window moves in five-minute steps so the chart is not redrawn from
+   scratch on every paint */
+function intraWindow(){
+  var end = Math.floor(Date.now()/300e3)*300e3, start = end - 864e5;
+  var held = {};
+  HOLDINGS.forEach(function(h){ if (priced(h) && h.cls !== "crypto") held[histKey(h)] = 1; });
+  for (var k in held){
+    var e = INTRA[k];
+    if (e && e.open && e.open < end && end - e.open < 4*864e5 && (start === end - 864e5 || e.open > start)) start = e.open;
+  }
+  return {start:start, end:end};
+}
+/* the price at a moment, read between the two nearest prices */
+function priceAt(e, at){
+  var t = e.t, c = e.c, lo = 0, hi = t.length - 1;
+  if (at <= t[0]) return c[0];
+  if (at >= t[hi]) return c[hi];
+  while (hi - lo > 1){ var mid = (lo + hi) >> 1; if (t[mid] <= at) lo = mid; else hi = mid; }
+  return c[lo] + (c[hi] - c[lo]) * (at - t[lo]) / (t[hi] - t[lo]);
+}
+function utcMs(s){
+  var m = /^(\d{4})-(\d\d)-(\d\d)[ T](\d\d):(\d\d)/.exec(s || "");
+  return m ? Date.UTC(+m[1], m[2]-1, +m[3], +m[4], +m[5]) : NaN;
+}
+function tdIntra(sym, key, interval, size){
+  return getJSON("https://api.twelvedata.com/time_series?symbol="+encodeURIComponent(sym)+
+      "&interval="+interval+"&order=asc&timezone=UTC&outputsize="+size+"&apikey="+encodeURIComponent(key))
+    .then(function(d){
+      if (d && d.status === "error") throw new Error(String(d.code || "error"));
+      return (d && d.values || []).map(function(v){ return [utcMs(v.datetime), +v.close]; })
+        .filter(function(v){ return isFinite(v[0]) && v[1] > 0; });
+    });
+}
+function cgId(t){
+  var ids; try { ids = JSON.parse(localStorage.getItem("basis.cgid") || "{}"); } catch(e){ ids = {}; }
+  if (ids[t]) return Promise.resolve(ids[t]);
+  return patient(CG, function(){ return getJSON("https://api.coingecko.com/api/v3/search?query="+encodeURIComponent(t)); })
+    .then(function(d){
+      var hit = (d && d.coins || []).filter(function(c){ return String(c.symbol).toUpperCase() === t; })[0];
+      if (!hit) throw new Error("unknown");
+      ids[t] = hit.id; try { localStorage.setItem("basis.cgid", JSON.stringify(ids)); } catch(e){}
+      return hit.id;
+    });
+}
+function refreshIntraday(){
+  var td = getKey("td"), now = Date.now(), wkend = [0,6].indexOf(new Date().getDay()) >= 0, seen = {};
+  HOLDINGS.filter(priced).forEach(function(h){
+    var k = histKey(h), t = h.tick.toUpperCase(), e = INTRA[k], crypto = h.cls === "crypto";
+    if (seen[k] || intraBusy[k]) return;
+    seen[k] = 1;
+    if (!crypto && !td) return;
+    if (e && now - e.at < 300e3) return;
+    /* the market is shut all weekend; Friday's session, once fetched, is the
+       latest there is */
+    if (!crypto && wkend && e && e.t.length && now - e.t[e.t.length-1] < 3*864e5) return;
+    intraBusy[k] = 1;
+    var job = crypto
+      ? (td ? patient(TD, function(){ return tdIntra(t + "/USD", td, "15min", 400); })
+            : cgId(t).then(function(id){
+                return patient(CG, function(){ return getJSON("https://api.coingecko.com/api/v3/coins/"+
+                  encodeURIComponent(id)+"/market_chart?vs_currency=usd&days=3"); });
+              }).then(function(d){ return (d && d.prices || []).map(function(p){ return [p[0], +p[1]]; }); }))
+      : patient(TD, function(){ return tdIntra(t, td, "5min", 120); });
+    job.then(function(rows){
+      if (!rows.length) throw new Error("empty");
+      var entry = {t:rows.map(function(r){ return r[0]; }), c:rows.map(function(r){ return r[1]; }), at:Date.now()};
+      if (!crypto){
+        /* the latest session is the bars sharing the last bar's date */
+        var last = new Date(entry.t[entry.t.length-1]).toISOString().slice(0,10), i = entry.t.length - 1;
+        while (i > 0 && new Date(entry.t[i-1]).toISOString().slice(0,10) === last) i--;
+        entry.open = entry.t[i];
+        entry.t = entry.t.slice(i); entry.c = entry.c.slice(i);
+      }
+      INTRA[k] = entry; saveIntra(); intraV++; rerender();
+    }).catch(function(){
+      if (INTRA[k]) { INTRA[k].at = Date.now(); saveIntra(); }
+    }).then(function(){ delete intraBusy[k]; });
   });
 }
 
