@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=39">
+<link rel="apple-touch-icon" href="icon-180.png?v=40">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -158,6 +158,12 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 .card-pad{padding:var(--rail)}
 .sect{font-size:var(--t-foot);font-weight:600;color:var(--label-2);letter-spacing:.01em;margin:var(--s-8) var(--s-1) var(--s-4)}
 .pad > .sect:first-child{margin-top:var(--s-6)}
+/* a section title with one control on its right. The control is a native
+   menu, drawn as plain accent text; it is 44pt tall without making the title
+   row any taller */
+.sect.split{display:flex;align-items:center;justify-content:space-between}
+.sect-pick{-webkit-appearance:none;appearance:none;border:0;background:none;outline:none;font:inherit;letter-spacing:inherit;
+  color:var(--accent);text-align:right;text-align-last:right;height:44px;min-width:44px;margin:-14px 0;padding:0 0 0 var(--s-6)}
 .card-h{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s-5);padding:var(--s-5) var(--rail) 0}
 .card-t{font-size:var(--t-sub);font-weight:600;letter-spacing:-.012em}
 .card-s{font-size:var(--t-cap);color:var(--label-2)}
@@ -171,6 +177,9 @@ input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 .row-r{text-align:right;flex-shrink:0}
 .row-v{font-size:var(--t-sub);font-weight:500}
 .row-d{font-size:var(--t-cap);margin-top:var(--s-1)}
+/* a leading glyph, for a short menu of actions */
+.row-i{width:24px;height:24px;flex-shrink:0;color:var(--accent);margin-right:var(--s-2)}
+.row-i svg{display:block;width:100%;height:100%}
 .chev{width:var(--s-4);height:var(--s-4);border-right:2px solid var(--label-3);border-bottom:2px solid var(--label-3);transform:rotate(-45deg);flex-shrink:0;margin-left:var(--s-1)}
 /* press feedback, as iOS gives it: a cell lights at once and fades on release,
    a capsule gives a little under the finger, a bar button dims */
@@ -316,6 +325,9 @@ textarea.box{
 }
 .btn:active{opacity:.82}
 .btn+.btn{margin-top:var(--s-4)}
+/* a few short actions side by side */
+.btn-row{display:flex;gap:var(--s-4);margin-top:var(--s-6)}
+.btn-row .btn{flex:1;margin-top:0}
 .btn.ghost{background:var(--surface);color:var(--accent)}
 .btn.warn{background:var(--surface);color:var(--neg)}
 .note{font-size:var(--t-cap);color:var(--label-2);line-height:1.45;margin:var(--s-4) 0 0}
@@ -436,7 +448,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <div id="todayMovers"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="returnCard">
         <div class="card-h"><div class="card-t">Total return</div><div class="card-s" id="returnPct"></div></div>
         <div class="card-pad" style="padding-top:var(--s-4);display:flex;gap:var(--s-8)">
           <div><div class="row-s" style="margin:0 0 var(--s-2)">Invested</div><div class="num" id="totalCost" style="font-size:var(--t-body);font-weight:600"></div></div>
@@ -445,7 +457,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
       </div>
 
 
-      <div class="card">
+      <div class="card" id="incomeCard">
         <div class="card-h"><div class="card-t">Estimated income</div><div class="card-s" id="incomeYield"></div></div>
         <div class="card-pad" style="padding-top:var(--s-4);display:flex;gap:var(--s-8)">
           <div><div class="row-s" style="margin:0 0 var(--s-2)">Per year</div><div class="num" id="incomeYear" style="font-size:var(--t-body);font-weight:600"></div></div>
@@ -454,7 +466,8 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         </div>
       </div>
 
-      <div class="sect">Holdings</div>
+      <div class="sect split"><span>Holdings</span>
+        <select class="sect-pick" id="holdSort" aria-label="Sort holdings"><option value="value">Value</option><option value="today">Today</option><option value="gain">Gain</option></select></div>
       <div class="card" id="holdingsList"></div>
       </div>
 
@@ -529,7 +542,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
       <div class="sect">Accounts</div>
       <div class="card" id="acctManage"></div>
       <div class="card">
-        <button class="row" data-sheet="account"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add an account</div></div><div class="chev"></div></button>
+        <button class="row" data-sheet="account"><div class="row-main"><div class="row-t" style="color:var(--accent)">Add an account</div></div></button>
       </div>
       <div class="card" id="defAcctCard"></div>
 
@@ -539,24 +552,21 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
       <div class="sect">Appearance</div>
       <div class="card"><div class="card-pad" style="padding-top:var(--s-5)"><div class="seg" id="themeSeg" style="margin-top:0"></div></div></div>
 
+      <div id="installSect">
       <div class="sect">Install</div>
       <div class="card">
-        <div class="card-pad">
-          <div class="row-t" style="margin-bottom:var(--s-2)">Put Basis on your Home Screen</div>
-          <div class="note" style="margin:0" id="installHow"></div>
-        </div>
+        <div class="row"><div class="row-main"><div class="row-t">Add to Home Screen</div><div class="row-s" id="installHow"></div></div></div>
+      </div>
       </div>
 
       <div class="sect">Data</div>
       <div class="card" id="dataCard"></div>
       <input type="file" id="backupFile" accept=".json,application/json" hidden>
       <div class="card">
-        <button class="row" data-sheet="about"><div class="row-main"><div class="row-t">About Basis</div></div><div class="chev"></div></button>
-        <button class="row" id="reloadApp"><div class="row-main"><div class="row-t" style="color:var(--accent)">Reload Basis</div>
-        <div class="row-s">Gets the newest version</div></div></button>
+        <button class="row" id="reloadApp"><div class="row-main"><div class="row-t" style="color:var(--accent)">Reload Basis</div></div></button>
       </div>
 
-      <div class="foot">Build 39</div>
+      <div class="foot">Build 40</div>
     </div>
   </section>
 
@@ -723,7 +733,8 @@ function el(id){ return document.getElementById(id); }
 var KEY = "basis.v2";
 var state = {
   tab:"portfolio", period:"1D", acct:"all", bAcct:"all",
-  theme:"system", scrubIndex:null, pxAt:0
+  theme:"system", scrubIndex:null, pxAt:0,
+  sort:"value"   /* how the holdings list is ordered; for this visit only, never saved */
 };
 var ACCOUNTS, HOLDINGS;
 
@@ -1056,6 +1067,20 @@ function bindChart(){
 }
 
 /* ========================= portfolio tab ========================= */
+/* One order for the holdings list and for the sheet a row opens: a row is
+   found again by its place in this order, so both must use this. Ties fall
+   back to value, then to the order held. */
+var SORTS = {
+  value: function(h){ return val(h); },
+  today: function(h){ return priced(h) ? (h.day || 0) : 0; },
+  gain:  function(h){ var b = basis(h); return h.cls === "loan" || !b ? -Infinity : (val(h)-b)/b; }
+};
+function holdOrder(hs){
+  var by = SORTS[state.sort] || SORTS.value;
+  return hs.map(function(h,i){ return {h:h, i:i, k:by(h)}; })
+    .sort(function(a,b){ return (a.k === b.k ? 0 : b.k - a.k) || (val(b.h)-val(a.h)) || (a.i-b.i); })
+    .map(function(o){ return o.h; });
+}
 function renderChips(){
   var html = '<button class="chip'+(state.acct==="all"?" on":"")+'" data-acct="all">All accounts</button>';
   ACCOUNTS.forEach(function(a){
@@ -1089,6 +1114,9 @@ function renderPortfolio(){
   el("incomeMonth").textContent = usd(income/12);
   el("incomeYield").textContent = invTotal ? (income/invTotal*100).toFixed(2)+"% on value" : "";
   el("incomeOnCost").textContent = invCost ? (income/invCost*100).toFixed(2)+"%" : "—";
+  /* a card of zeros says nothing: nothing pays here, or it is all cash */
+  el("incomeCard").hidden = !(income >= 0.005);
+  el("returnCard").hidden = hs.length > 0 && hs.every(function(h){ return h.cls === "cash"; });
 
   /* today's movers, within scope, biggest absolute dollar move first */
   var movers = hs.filter(function(h){ return h.day; })
@@ -1107,11 +1135,17 @@ function renderPortfolio(){
   }).join("");
   syncTodayCard();
 
-  /* holdings, biggest first. No chevron: a row opens a sheet over this page,
-     it does not push a new one, and iOS keeps the arrow for that */
-  var sorted = hs.slice().sort(function(a,b){ return val(b)-val(a); });
+  /* holdings, biggest first unless asked otherwise. No chevron: a row opens a
+     sheet over this page, it does not push a new one, and iOS keeps the arrow
+     for that */
+  var sorted = holdOrder(hs), byDay = state.sort === "today";
+  el("holdSort").value = SORTS[state.sort] ? state.sort : "value";
+  el("holdSort").hidden = hs.length < 2;
   el("holdingsList").innerHTML = sorted.length ? sorted.map(function(h,i){
     var g = val(h)-basis(h), gp = basis(h) ? g/basis(h)*100 : 0, gTxt = pct(gp,1);
+    /* ordered by today, the small figure is today's move; what has no market
+       price has none */
+    if (byDay) gTxt = priced(h) ? pct(h.day || 0) : "";
     /* the same fund can sit in two accounts - across all of them, say which */
     /* how many you hold, and nothing else: the price is in the row's sheet */
     var qty = h.shares.toLocaleString("en-US",{maximumFractionDigits:4});
@@ -1277,8 +1311,10 @@ function renderSettings(){
     return '<button class="row" data-editacct="'+esc(a.id)+'">'+
       '<div class="row-main"><div class="row-t">'+esc(a.name)+'</div>'+
       '<div class="row-s">'+(a.firm ? esc(a.firm)+' · ' : '')+n+' holding'+(n===1?"":"s")+'</div></div>'+
-      '<div class="row-r"><div class="row-v num">'+usd(v)+'</div></div><div class="chev"></div></button>';
-  }).join("") || '<div class="empty">No accounts yet.</div>';
+      '<div class="row-r"><div class="row-v num">'+usd(v)+'</div></div></button>';
+  }).join("");
+  /* with no accounts the row below, Add an account, is the whole story */
+  el("acctManage").hidden = !ACCOUNTS.length;
 
   el("defAcctCard").hidden = !ACCOUNTS.length;
   el("defAcctCard").innerHTML = ACCOUNTS.length ?
@@ -1286,15 +1322,17 @@ function renderSettings(){
   if (ACCOUNTS.length) el("setDefAcct").addEventListener("change", function(){ state.defAcct = this.value; save(); });
 
   var key = pxKey();
+  /* each source: what it prices, who it comes from, whether it is on. One that
+     needs a key says so where the answer would be */
+  function src(what, from, on, sheet){
+    var body = '<div class="row-main"><div class="row-t">'+what+'</div><div class="row-s">'+from+'</div></div>'+
+      '<div class="row-r"><div class="row-v"'+(on ? '' : ' style="color:var(--accent)"')+'>'+(on ? 'On' : 'Add key')+'</div></div>';
+    return sheet ? '<button class="row" data-sheet="'+sheet+'">'+body+'</button>' : '<div class="row">'+body+'</div>';
+  }
   el("pxCard").innerHTML =
-    '<div class="row"><div class="row-main"><div class="row-t">Crypto</div>'+
-    '<div class="row-s">From CoinGecko, no key needed</div></div></div>'+
-    '<button class="row" data-sheet="pxkey"><div class="row-main"><div class="row-t">Stocks and funds</div>'+
-    '<div class="row-s">'+(key ? 'From Finnhub, with your key' : 'Add a free Finnhub key to update these')+'</div></div>'+
-    '<div class="row-r"><div class="row-v">'+(key ? 'On' : 'Off')+'</div></div><div class="chev"></div></button>'+
-    '<button class="row" data-sheet="histkey"><div class="row-main"><div class="row-t">Chart history</div>'+
-    '<div class="row-s">'+(getKey("td") ? 'From Twelve Data, with your key' : 'Crypto’s past year only. Add a free Twelve Data key for the rest')+'</div></div>'+
-    '<div class="row-r"><div class="row-v">'+(getKey("td") ? 'On' : 'Off')+'</div></div><div class="chev"></div></button>'+
+    src("Crypto", "CoinGecko", true)+
+    src("Stocks and funds", "Finnhub", !!key, "pxkey")+
+    src("Chart history", "Twelve Data", !!getKey("td"), "histkey")+
     '<div class="row"><div class="row-main"><div class="row-t">Last updated</div></div>'+
     '<div class="row-r"><div class="row-v">'+(state.pxAt ? when(state.pxAt) : 'Never')+'</div></div></div>';
 
@@ -1304,26 +1342,22 @@ function renderSettings(){
 
   var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
   var ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  el("installHow").textContent = standalone
-    ? "Basis is running from your Home Screen."
-    : ios ? "In Safari, tap the Share button, then Add to Home Screen. It opens full screen, with no address bar."
-          : "Open your browser menu and choose Install, or Add to Home Screen.";
+  /* once it runs from the Home Screen there is nothing left to say */
+  el("installSect").hidden = standalone;
+  el("installHow").textContent = ios ? "Share, then Add to Home Screen" : "Browser menu, then Install";
 
   el("dataCard").innerHTML =
-    '<div class="row"><div class="row-main"><div class="row-t">Holdings stored</div></div>'+
-    '<div class="row-r"><div class="row-v num">'+HOLDINGS.length+' holding'+(HOLDINGS.length===1?"":"s")+'</div></div></div>'+
+    /* what each of these does is spelled out where it is confirmed, not here */
+    '<div class="row"><div class="row-main"><div class="row-t">Holdings</div></div>'+
+    '<div class="row-r"><div class="row-v num">'+HOLDINGS.length+'</div></div></div>'+
     '<button class="row" id="backupSave"><div class="row-main">'+
-    '<div class="row-t" style="color:var(--accent)">Export a backup</div>'+
-    '<div class="row-s">Save a file to iCloud Drive or Files</div></div></button>'+
+    '<div class="row-t" style="color:var(--accent)">Export a backup</div></div></button>'+
     '<button class="row" id="backupLoad"><div class="row-main">'+
-    '<div class="row-t" style="color:var(--accent)">Restore from a backup</div>'+
-    '<div class="row-s">Replaces what is here with the file’s accounts and holdings</div></div></button>'+
+    '<div class="row-t" style="color:var(--accent)">Restore from a backup</div></div></button>'+
     '<button class="row" data-reset="empty"><div class="row-main">'+
-    '<div class="row-t" style="color:var(--neg)">Start empty</div>'+
-    '<div class="row-s">Removes every account and holding</div></div></button>'+
+    '<div class="row-t" style="color:var(--neg)">Start empty</div></div></button>'+
     '<button class="row" data-reset="example"><div class="row-main">'+
-    '<div class="row-t" style="color:var(--neg)">Reset to the example portfolio</div>'+
-    '<div class="row-s">Replaces everything with sample accounts</div></div></button>';
+    '<div class="row-t" style="color:var(--neg)">Reset to example</div></div></button>';
 }
 
 /* ========================= live prices ========================= */
@@ -1641,9 +1675,9 @@ function sheetKey(kind){
     '<div class="card" style="margin-top:var(--s-2)">'+
     fieldText("fKey","Key","Paste your key", had)+
     '</div>'+
-    '<div class="note">'+K.name+' gives a free key for '+K.what+'. Sign up at '+
-    '<a href="'+K.url+'" target="_blank" rel="noopener" style="color:var(--accent)">'+K.site+'</a>, '+
-    'then copy the API key from your dashboard and paste it here. It stays on this device.</div>'+
+    '<div class="note">Free from '+
+    '<a href="'+K.url+'" target="_blank" rel="noopener" style="color:var(--accent)">'+K.site+'</a>. '+
+    'Stays on this device.</div>'+
     (had ? '<button class="btn warn" id="fKeyDel">Remove key</button>' : '');
   function commit(){
     var k = el("fKey").value.trim();
@@ -1961,21 +1995,27 @@ function fieldSelect(id,label,opts,sel){
     '</select></div>';
 }
 
+/* six ways in, each a glyph and a name. No arrows: every one of them opens in
+   this same sheet */
+var ADD_ICONS = {
+  holding:'<circle cx="12" cy="12" r="8.4"/><path d="M12 8.2v7.6M8.2 12h7.6"/>',
+  say:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>',
+  account:'<path d="M3.5 9.5 12 4l8.5 5.5z"/><path d="M6.5 10v7M12 10v7M17.5 10v7M3.5 20h17"/>',
+  "import":'<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>',
+  scan:'<path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.3"/>',
+  offAsset:'<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.8V20h13V9.8"/><path d="M10 20v-5.5h4V20"/>'
+};
 function sheetAddMenu(){
+  function way(k, name){
+    return '<button class="row" data-sheet="'+k+'"><div class="row-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
+      'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ADD_ICONS[k]+'</svg></div>'+
+      '<div class="row-main"><div class="row-t">'+name+'</div></div></button>';
+  }
   openSheet("Add", '<div class="card" style="margin-top:var(--s-2)">'+
-    '<button class="row" data-sheet="holding"><div class="row-main"><div class="row-t">A holding</div>'+
-    '<div class="row-s">One symbol, shares and cost</div></div><div class="chev"></div></button>'+
-    '<button class="row" data-sheet="say"><div class="row-main"><div class="row-t">Say what changed</div>'+
-    '<div class="row-s">Buys and sells, spoken or typed</div></div><div class="chev"></div></button>'+
-    '<button class="row" data-sheet="account"><div class="row-main"><div class="row-t">An account</div>'+
-    '<div class="row-s">Another brokerage, IRA, wallet or bank</div></div><div class="chev"></div></button>'+
-    '<button class="row" data-sheet="import"><div class="row-main"><div class="row-t">A list of holdings</div>'+
-    '<div class="row-s">Paste rows from a spreadsheet or export</div></div><div class="chev"></div></button>'+
-    '<button class="row" data-sheet="scan"><div class="row-main"><div class="row-t">A photo of a statement</div>'+
-    '<div class="row-s">Capture now, type the numbers in</div></div><div class="chev"></div></button>'+
+    way("holding","Holding")+way("say","Say what changed")+way("account","Account")+
+    way("import","Import a list")+way("scan","Scan a statement")+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
-    '<button class="row" data-sheet="offAsset"><div class="row-main"><div class="row-t">Something you own</div>'+
-    '<div class="row-s">A home, a car, a collectible or a loan</div></div><div class="chev"></div></button>'+
+    way("offAsset","Home, car or loan")+
     '</div>');
 }
 
@@ -2142,11 +2182,12 @@ function sheetOffDetail(h){
 
 function sheetHoldDetail(idx){
   var hs = scoped(el("holdingsList").dataset.scope || "all");
-  var sorted = hs.slice().sort(function(a,b){ return val(b)-val(a); });
+  var sorted = holdOrder(hs);
   var h = sorted[idx]; if(!h) return;
   if (OFF[h.cls]) return sheetOffDetail(h);
   var g = val(h)-basis(h), gp = basis(h)?g/basis(h)*100:0;
   var inc = val(h)*(h.yield||0)/100;
+  var dAmt = h.day ? (h.price - h.price/(1+h.day/100))*h.shares : 0;
   function line(k,v){ return '<div class="row"><div class="row-main"><div class="row-t">'+k+
     '</div></div><div class="row-r"><div class="row-v num">'+v+'</div></div></div>'; }
   openSheet(h.tick, '<div class="card" style="margin-top:var(--s-2)">'+
@@ -2157,14 +2198,15 @@ function sheetHoldDetail(idx){
     (h.cls==="cash" ? "" : line("Cost per share", usd(h.cost,2)))+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     line("Value", usd(val(h)))+
+    (h.day ? line("Today", '<span class="'+tone(signed(dAmt))+'">'+signed(dAmt)+" ("+pct(h.day)+')</span>') : "")+
     line("Invested", usd(basis(h)))+
     line("Gain", '<span class="'+tone(signed(g))+'">'+signed(g)+" ("+pct(gp,1)+')</span>')+
     (h.yield ? line("Per year", usd(inc)) : "")+
     (h.mix ? line("Sector", esc(Object.keys(h.mix).length===1?Object.keys(h.mix)[0]:"Fund, many sectors")) : "")+
     (h.cat ? line("Category", esc(h.cat)) : "")+
-    '</div>'+(h.cls==="cash" ? "" : '<button class="btn ghost" id="fBuy">Record a buy</button>'+
-                            '<button class="btn ghost" id="fSell">Record a sale</button>')+
-    '<button class="btn ghost" id="fEdit">Edit holding</button>', function(){
+    '</div><div class="btn-row">'+(h.cls==="cash" ? "" : '<button class="btn ghost" id="fBuy">Buy</button>'+
+                            '<button class="btn ghost" id="fSell">Sell</button>')+
+    '<button class="btn ghost" id="fEdit">Edit</button></div>', function(){
       if (el("fBuy")) el("fBuy").addEventListener("click", function(){ sheetBuy(h); });
       if (el("fSell")) el("fSell").addEventListener("click", function(){ sheetSell(h); });
       el("fEdit").addEventListener("click", function(){ sheetHolding(null, h); });
@@ -2189,10 +2231,8 @@ function sheetBuy(h){
   function preview(){
     var r = read();
     el("fBuyNote").textContent = r
-      ? "You will hold " + r.shares.toLocaleString("en-US",{maximumFractionDigits:6}) +
-        " shares at " + usd(r.cost,2) + " each on average."
-      : "You hold " + h.shares.toLocaleString("en-US",{maximumFractionDigits:6}) +
-        " shares at " + usd(h.cost,2) + " each on average.";
+      ? shrTxt(h.shares) + " → " + shrTxt(r.shares) + " shares · " + usd(r.cost,2) + " average cost"
+      : shrTxt(h.shares) + " shares · " + usd(h.cost,2) + " average cost";
   }
   function commit(){
     var r = read();
@@ -2227,10 +2267,10 @@ function sheetSell(h){
   function preview(){
     var c = read(), left = h.shares - c.shares;
     el("fSellNote").textContent = !(c.shares > 0)
-      ? "You hold " + shrTxt(h.shares) + " shares at " + usd(h.cost,2) + " each on average."
-      : left < -1e-9 ? "You hold " + shrTxt(h.shares) + " shares."
-      : (left < 1e-9 ? "This sells all of it." : "You will hold " + shrTxt(left) + " shares at " + usd(h.cost,2) + " each on average.") +
-        (c.cash ? " " + usd(c.shares * (c.price > 0 ? c.price : h.price), 2) + " goes to this account’s cash." : "");
+      ? shrTxt(h.shares) + " shares · " + usd(h.cost,2) + " average cost"
+      : left < -1e-9 ? shrTxt(h.shares) + " shares held"
+      : shrTxt(h.shares) + " → " + shrTxt(left < 1e-9 ? 0 : left) + " shares" +
+        (c.cash ? " · " + usd(c.shares * (c.price > 0 ? c.price : h.price), 2) + " to cash" : "");
   }
   function commit(){
     var c = read(), o = sayOutcome(c);
@@ -2844,14 +2884,6 @@ function sheetSayCheck(rows, text){
   }});
 }
 
-function sheetAbout(){
-  openSheet("About",
-    '<div class="card" style="margin-top:var(--s-2)">'+
-    '<div class="row"><div class="row-main"><div class="row-t">Your data</div>'+
-    '<div class="row-s" style="white-space:normal">Everything you add stays on this device.</div></div></div>'+
-    '</div>');
-}
-
 /* ========================= tabs + chrome ========================= */
 var ICONS = {
   portfolio:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17.5l5.2-5.6 3.4 3.1L21 5.5"/><path d="M15.4 5.5H21v5.4"/><path d="M3 21h18"/></svg>',
@@ -2996,7 +3028,6 @@ document.addEventListener("click", function(e){
     else if (which==="import") sheetImport();
     else if (which==="say") sheetSay();
     else if (which==="scan") sheetScan();
-    else if (which==="about") sheetAbout();
     else if (which==="pxkey") sheetKey("fh");
     else if (which==="histkey") sheetKey("td");
     return;
@@ -3117,6 +3148,12 @@ window.addEventListener("resize", function(){ if(state.tab==="portfolio") paintH
    An installed app is resumed rather than relaunched, though, so look for a
    new worker whenever Basis comes back to the front and offer the reload. */
 el("reloadApp").addEventListener("click", function(){ location.reload(); });
+/* the holdings order. Kept for this visit only: it is a way of looking, not
+   part of what is saved */
+el("holdSort").addEventListener("change", function(){
+  state.sort = SORTS[this.value] ? this.value : "value";
+  renderPortfolio();
+});
 if ("serviceWorker" in navigator) {
   var hadWorker = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", function(){
