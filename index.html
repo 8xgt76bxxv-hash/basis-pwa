@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=40">
+<link rel="apple-touch-icon" href="icon-180.png?v=41">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -566,7 +566,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <button class="row" id="reloadApp"><div class="row-main"><div class="row-t" style="color:var(--accent)">Reload Basis</div></div></button>
       </div>
 
-      <div class="foot">Build 40</div>
+      <div class="foot">Build 41</div>
     </div>
   </section>
 
@@ -2152,7 +2152,8 @@ function sheetHolding(preset, edit, acct){
       el("wrap-fBought").style.display = off ? "none" : "";
       relabel("fName2", off ? "What is it" : "Name");
       relabel("fPx", off ? (c==="loan" ? "Balance owed" : "Worth today") : "Price now");
-      relabel("fCb", off ? "What you paid" : "Cost per share");
+      relabel("fCb", off ? "What you paid" : c==="crypto" ? "Cost per coin" : "Cost per share");
+      relabel("fSh", c==="crypto" ? "Amount" : "Shares");
       el("fName2").placeholder = off ? "Home" : "Vanguard Total Stock Market";
       el("fPx").placeholder = off ? (c==="loan" ? "142000" : "165000") : "312.44";
       el("fCb").placeholder = off ? "148000" : "214.80";
@@ -2193,9 +2194,9 @@ function sheetHoldDetail(idx){
   openSheet(h.tick, '<div class="card" style="margin-top:var(--s-2)">'+
     line("Account", esc(acctById(h.acct).name))+
     line("Type", esc(CLASS_META[h.cls].label))+
-    (h.cls==="cash" ? "" : line("Shares", h.shares.toLocaleString("en-US",{maximumFractionDigits:6})))+
+    (h.cls==="cash" ? "" : line(h.cls==="crypto" ? "Amount" : "Shares", h.shares.toLocaleString("en-US",{maximumFractionDigits:6})))+
     (h.cls==="cash" ? "" : line("Price", usd(h.price,2)))+
-    (h.cls==="cash" ? "" : line("Cost per share", usd(h.cost,2)))+
+    (h.cls==="cash" ? "" : line(h.cls==="crypto" ? "Cost per coin" : "Cost per share", usd(h.cost,2)))+
     '</div><div class="card" style="margin-top:var(--s-5)">'+
     line("Value", usd(val(h)))+
     (h.day ? line("Today", '<span class="'+tone(signed(dAmt))+'">'+signed(dAmt)+" ("+pct(h.day)+')</span>') : "")+
@@ -2218,8 +2219,8 @@ function sheetHoldDetail(idx){
 function sheetBuy(h){
   var html = '<div class="err" id="fErr" role="alert"></div>'+
     '<div class="card" style="margin-top:var(--s-2)">'+
-    fieldText("fBuySh","Shares bought","2","","number")+
-    fieldText("fBuyPx","Price per share", h.price.toFixed(2),"","number")+
+    fieldText("fBuySh", h.cls==="crypto" ? "Amount bought" : "Shares bought","2","","number")+
+    fieldText("fBuyPx", h.cls==="crypto" ? "Price per coin" : "Price per share", h.price.toFixed(2),"","number")+
     '</div><div class="note" id="fBuyNote"></div>';
   function read(){
     var n = num(el("fBuySh").value), px = num(el("fBuyPx").value);
@@ -2231,12 +2232,12 @@ function sheetBuy(h){
   function preview(){
     var r = read();
     el("fBuyNote").textContent = r
-      ? shrTxt(h.shares) + " → " + shrTxt(r.shares) + " shares · " + usd(r.cost,2) + " average cost"
-      : shrTxt(h.shares) + " shares · " + usd(h.cost,2) + " average cost";
+      ? shrTxt(h.shares) + " → " + shrTxt(r.shares) + unitOf(h) + " · " + usd(r.cost,2) + " average cost"
+      : shrTxt(h.shares) + unitOf(h) + " · " + usd(h.cost,2) + " average cost";
   }
   function commit(){
     var r = read();
-    if (!r){ formError("Enter how many shares you bought."); return; }
+    if (!r){ formError(h.cls==="crypto" ? "Enter how much you bought." : "Enter how many shares you bought."); return; }
     var was = {shares:h.shares, cost:h.cost};
     h.shares = r.shares; h.cost = r.cost;
     save(); renderAll(); closeSheet();
@@ -2256,7 +2257,7 @@ function sheetBuy(h){
 function sheetSell(h){
   var html = '<div class="err" id="fErr" role="alert"></div>'+
     '<div class="card" style="margin-top:var(--s-2)">'+
-    fieldText("fSellSh","Shares sold","1","","number")+
+    fieldText("fSellSh", h.cls==="crypto" ? "Amount sold" : "Shares sold","1","","number")+
     fieldText("fSellPx","Sold at", h.price.toFixed(2),"","number")+
     fieldSwitch("fSellCash","Add to cash", false)+
     '</div><div class="note" id="fSellNote" style="min-height:2lh"></div>';
@@ -2267,9 +2268,9 @@ function sheetSell(h){
   function preview(){
     var c = read(), left = h.shares - c.shares;
     el("fSellNote").textContent = !(c.shares > 0)
-      ? shrTxt(h.shares) + " shares · " + usd(h.cost,2) + " average cost"
-      : left < -1e-9 ? shrTxt(h.shares) + " shares held"
-      : shrTxt(h.shares) + " → " + shrTxt(left < 1e-9 ? 0 : left) + " shares" +
+      ? shrTxt(h.shares) + unitOf(h) + " · " + usd(h.cost,2) + " average cost"
+      : left < -1e-9 ? shrTxt(h.shares) + unitOf(h) + " held"
+      : shrTxt(h.shares) + " → " + shrTxt(left < 1e-9 ? 0 : left) + unitOf(h) +
         (c.cash ? " · " + usd(c.shares * (c.price > 0 ? c.price : h.price), 2) + " to cash" : "");
   }
   function commit(){
@@ -2402,6 +2403,8 @@ function applyPlan(plan, acct){
 }
 
 function shrTxt(n){ return n.toLocaleString("en-US",{maximumFractionDigits:6}); }
+/* a coin is not a share: crypto counts in its own symbol */
+function unitOf(h){ return h.cls==="crypto" ? " "+h.tick.toUpperCase() : " shares"; }
 function planLabel(p){
   var r = p.row, n = shrTxt(r.shares);
   if (p.kind === "new")    return "New · " + n + " shares at " + usd(r.price,2);
@@ -2761,8 +2764,8 @@ function sayOutcome(c){
   if (c.act === "sell"){
     if (!cur) return {ok:false, msg:"There is no " + c.tick + " in this account."};
     if (c.shares > cur.shares + 1e-9) return {ok:false, msg:"This account holds " + shrTxt(cur.shares) + "."};
-    msg = c.shares >= cur.shares - 1e-9 ? "Sells all " + shrTxt(cur.shares) + " shares"
-                                       : shrTxt(cur.shares) + " → " + shrTxt(cur.shares - c.shares) + " shares";
+    msg = c.shares >= cur.shares - 1e-9 ? "Sells all " + shrTxt(cur.shares) + unitOf(cur)
+                                       : shrTxt(cur.shares) + " → " + shrTxt(cur.shares - c.shares) + unitOf(cur);
     if (c.cash) msg += " · " + usd(c.shares * px, 2) + " to cash";
   } else {
     if (!(px > 0)) return {ok:false, msg:"Enter the price paid."};
@@ -2771,7 +2774,7 @@ function sayOutcome(c){
     else {
       var add = to - cur.shares;
       var cost = add > 0 ? (cur.shares * cur.cost + add * px) / to : cur.cost;
-      msg = shrTxt(cur.shares) + " → " + shrTxt(to) + " shares · " + usd(cost,2) + " average cost";
+      msg = shrTxt(cur.shares) + " → " + shrTxt(to) + unitOf(cur) + " · " + usd(cost,2) + " average cost";
     }
   }
   return {ok:true, msg:msg};
