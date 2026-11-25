@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Basis">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png?v=41">
+<link rel="apple-touch-icon" href="icon-180.png?v=42">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 
 <style>
@@ -214,6 +214,22 @@ button.row:active{background:var(--surface-2)}
 .cross{position:absolute;top:0;bottom:0;width:1px;background:var(--label-3);opacity:0;pointer-events:none}
 .knob{position:absolute;width:var(--s-6);height:var(--s-6);border-radius:50%;background:var(--accent);border:2px solid var(--surface);opacity:0;pointer-events:none;transform:translate(-50%,-50%)}
 .cross.on,.knob.on{opacity:1}
+/* the S&P 500 beside you: a quiet gray line, and a key that turns it off */
+.bench{display:inline-flex;align-items:center;gap:var(--s-3);margin-top:var(--s-4);font-size:var(--t-foot);color:var(--label-2);min-height:32px;position:relative}
+.bench::before{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%)}
+.bench i{width:14px;height:2px;border-radius:1px;background:var(--label-3)}
+.bench.off{opacity:.45}
+.bench.off i{background:transparent;border-top:2px dotted var(--label-3);height:0}
+.topbar-eye{margin-left:auto;margin-right:var(--s-2);padding:0 var(--s-3);min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;color:var(--accent)}
+.topbar-eye svg{width:22px;height:22px}
+.topbar-eye + .topbar-act{margin-left:0}
+/* income by month: one bar a month, the picked one in full colour */
+.divbars{display:flex;align-items:flex-end;gap:var(--s-2);height:72px;padding:0 var(--rail);margin-top:var(--s-6)}
+.divbars button{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:var(--s-2);min-width:0}
+.divbars b{display:block;width:100%;max-width:18px;border-radius:4px 4px 1px 1px;background:var(--accent);opacity:.3;min-height:2px}
+.divbars button.on b{opacity:1}
+.divbars span{font-size:var(--t-cap2);color:var(--label-3);line-height:1}
+.divbars button.on span{color:var(--label);font-weight:600}
 
 .seg{display:flex;gap:var(--s-1);background:var(--surface-3);border-radius:var(--r-md);padding:var(--s-1);margin-top:var(--s-6)}
 /* the selected segment is concentric with its track: outer radius less the inset */
@@ -399,6 +415,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
       <div class="topbar-in pad">
         <div class="topbar-lead" id="updatedAt"></div>
         <div class="topbar-title">Portfolio</div>
+        <button class="topbar-eye" id="maskBtn" aria-label="Hide amounts"></button>
         <button class="topbar-act" data-sheet="addMenu">Add</button>
       </div>
     </div>
@@ -428,6 +445,8 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
               <path id="chartArea" fill="url(#gFill)"></path>
               <path id="chartBase" fill="none" stroke="var(--label-3)" stroke-width="1"
                     stroke-dasharray="3 5" vector-effect="non-scaling-stroke"></path>
+              <path id="chartBench" fill="none" stroke="var(--label-3)" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
               <path id="chartMarks" fill="none" stroke="var(--accent)" stroke-width="2" opacity=".55"
                     stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
               <path id="chartLine" fill="none" stroke="var(--accent)" stroke-width="2"
@@ -436,6 +455,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
             <div class="cross" id="cross"></div>
             <div class="knob" id="knob"></div>
           </div>
+          <button class="bench" id="benchKey" hidden><i></i><span>S&amp;P 500</span><span id="benchPct" class="num"></span></button>
           <div class="seg" id="periodSeg"></div>
         </div>
       </div>
@@ -464,6 +484,8 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
           <div><div class="row-s" style="margin:0 0 var(--s-2)">Per month</div><div class="num" id="incomeMonth" style="font-size:var(--t-body);font-weight:600"></div></div>
           <div><div class="row-s" style="margin:0 0 var(--s-2)">On cost</div><div class="num" id="incomeOnCost" style="font-size:var(--t-body);font-weight:600"></div></div>
         </div>
+        <div class="divbars" id="divBars"></div>
+        <div id="divMonth"></div>
       </div>
 
       <div class="sect split"><span>Holdings</span>
@@ -566,7 +588,7 @@ textarea.box.say{font-family:inherit;min-height:168px;margin-top:var(--s-2)}
         <button class="row" id="reloadApp"><div class="row-main"><div class="row-t" style="color:var(--accent)">Reload Basis</div></div></button>
       </div>
 
-      <div class="foot">Build 41</div>
+      <div class="foot">Build 42</div>
     </div>
   </section>
 
@@ -713,8 +735,14 @@ function walk(seed,n,vol,from,to){
   return out;
 }
 
-function money(v,dp){ return v<0 ? "−"+usd(-v,dp) : usd(v,dp); }
+/* Hide amounts: every dollar figure prints as dots, percentages stay. Kept
+   in its own key so the saved portfolio never changes shape. */
+var MASK = false;
+try { MASK = localStorage.getItem("basis.mask") === "1"; } catch(e){}
+var MASKED = "$•••••";
+function money(v,dp){ return MASK ? MASKED : v<0 ? "−"+usd(-v,dp) : usd(v,dp); }
 function usd(n,dp){
+  if (MASK) return MASKED;
   var d = dp===undefined ? (Math.abs(n)>=1000?0:2) : dp;
   return "$"+n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
 }
@@ -915,10 +943,12 @@ function smoothPath(P){
   }
   return d;
 }
-function drawChart(series, invested){
+function drawChart(series, invested, bench){
   var W=1000, H=300, PAD=14, i;
   var lo=Infinity, hi=-Infinity;
   for(i=0;i<series.length;i++){ if(series[i]<lo)lo=series[i]; if(series[i]>hi)hi=series[i]; }
+  var bv = bench ? bench.v : null;
+  if (bv) for(i=0;i<bv.length;i++){ if (isFinite(bv[i])){ if(bv[i]<lo)lo=bv[i]; if(bv[i]>hi)hi=bv[i]; } }
   if (hi===lo){ hi=lo+1; lo=lo-1; }
   var span = hi-lo;
   chartPts = series.map(function(v,ix){
@@ -943,6 +973,56 @@ function drawChart(series, invested){
     }
   }
   el("chartMarks").setAttribute("d", tk.trim());
+
+  var bp = [];
+  if (bv) for(i=0;i<bv.length;i++) if (isFinite(bv[i]))
+    bp.push({ x: bv.length<2?0:i/(bv.length-1)*W, y: PAD + (1-(bv[i]-lo)/span)*(H-2*PAD) });
+  el("chartBench").setAttribute("d", bp.length > 1 ? smoothPath(bp).trim() : "");
+}
+
+/* ---- the S&P 500, for comparison ----
+   SPY's closes (and its day in five-minute steps on 1D), fetched with the
+   same Twelve Data key as your own history. The line is the same money on
+   the same days put into the S&P 500 instead: what the portfolio was worth
+   where the line starts, plus every deposit after it, bought at that day's
+   price. Without the key there is no line, never a made-up one. */
+var BENCH = {cls:"us_stock", tick:"SPY", acct:"", shares:0, price:0};
+var benchOn = true;
+try { benchOn = localStorage.getItem("basis.bench") !== "0"; } catch(e){}
+var benchMemo = {k:null, r:null};
+function benchSeries(series, inv){
+  var n = series.length, i, px = new Array(n);
+  var memo = state.period+"|"+state.acct+"|"+histV+"|"+intraV+"|"+n+"|"+series[0]+"|"+series[n-1];
+  if (benchMemo.k === memo) return benchMemo.r;
+  var ie = INTRA["s:SPY"], he = HIST["s:SPY"], r = null;
+  if (n > 1 && state.period === "1D" && ie && ie.t.length){
+    var w = intraWindow(), p0 = ie.c[0];
+    if (he && he.t.length && ie.open){ var pc = closeOn(he, dayOf(new Date(ie.open).toISOString()) - 1); if (pc > 0) p0 = pc; }
+    for(i=0;i<n;i++){
+      var at = w.start + (w.end - w.start)*i/(n-1);
+      px[i] = ie.open && at <= ie.t[0] ? p0 : priceAt(ie, at);
+    }
+  } else if (n > 1 && state.period !== "1D" && he && he.t.length){
+    var today = dayNum(TODAY);
+    for(i=0;i<n;i++) px[i] = closeOn(he, today-(n-1-i));
+    /* today's point is the latest trade when there is one */
+    if (ie && ie.t.length && Date.now() - ie.at < 864e5) px[n-1] = ie.c[ie.c.length-1];
+  } else px = null;
+  if (px){
+    var a = -1;
+    for(i=0;i<n;i++) if (series[i] > 0 && px[i] > 0){ a = i; break; }
+    if (a >= 0 && a < n-1){
+      var units = series[a]/px[a], v = new Array(n);
+      for(i=0;i<n;i++){
+        if (i < a){ v[i] = NaN; continue; }
+        if (i > a && inv && px[i] > 0) units += ((inv[i] || 0) - (inv[i-1] || 0))/px[i];
+        v[i] = px[i] > 0 ? units*px[i] : NaN;
+      }
+      r = {v:v, a:a, px:px};
+    }
+  }
+  benchMemo = {k:memo, r:r};
+  return r;
 }
 
 function periodDef(k){ for(var i=0;i<PERIODS.length;i++) if(PERIODS[i].k===k) return PERIODS[i]; return PERIODS[2]; }
@@ -963,7 +1043,8 @@ function dateAt(ix, n){
 function paintHero(){
   var series = portfolioSeries(state.acct, state.period);
   var inv = investedSeries(state.acct, state.period);
-  drawChart(series, inv);
+  var bench = benchSeries(series, inv);
+  drawChart(series, inv, benchOn ? bench : null);
   var n = series.length, q;
   var ix = state.scrubIndex === null ? n-1 : Math.max(0, Math.min(n-1, state.scrubIndex));
   /* the ticks under the chart are deposits. A finger near one lands on it, and
@@ -994,6 +1075,18 @@ function paintHero(){
   el("heroDelta").innerHTML = '<span class="'+mTone+'">'+
     (mTone==="dim" ? "" : '<span class="arrow">'+(mTone==="pos"?"▲":"▼")+'</span> ')+
     mAbs+' ('+mPct+')</span>';
+
+  /* the key says how the S&P 500 itself did, over the same stretch */
+  var key = el("benchKey");
+  key.hidden = !bench;
+  if (bench){
+    key.classList.toggle("off", !benchOn);
+    var bi = ix, bpx = bench.px;
+    while (bi > bench.a && !(bpx[bi] > 0)) bi--;
+    var bTxt = bpx[bi] > 0 ? pct((bpx[bi]/bpx[bench.a] - 1)*100) : "";
+    el("benchPct").textContent = bTxt;
+    el("benchPct").className = "num " + (benchOn ? tone(bTxt) : "");
+  }
 
   /* on 1D the hero already is today - do not print the same number twice */
   var oneDay = state.period === "1D";
@@ -1117,6 +1210,7 @@ function renderPortfolio(){
   /* a card of zeros says nothing: nothing pays here, or it is all cash */
   el("incomeCard").hidden = !(income >= 0.005);
   el("returnCard").hidden = hs.length > 0 && hs.every(function(h){ return h.cls === "cash"; });
+  renderIncome();
 
   /* today's movers, within scope, biggest absolute dollar move first */
   var movers = hs.filter(function(h){ return h.day; })
@@ -1152,6 +1246,7 @@ function renderPortfolio(){
     var off = !!OFF[h.cls], named = off || h.cls==="cash";
     var sub = off ? CLASS_META[h.cls].label
             : h.cls==="cash" ? acctById(h.acct).name
+            : MASK ? (state.acct==="all" ? acctById(h.acct).name : "")
             : state.acct==="all" ? acctById(h.acct).name+" · "+qty : qty;
     /* a loan has no return to speak of */
     if (h.cls==="loan") gTxt = "";
@@ -1169,6 +1264,64 @@ function renderPortfolio(){
   el("updatedAt").textContent = updatedText();
   state.scrubIndex = null;
   paintHero();
+}
+
+/* ---- income by month ----
+   An estimate, as the card says: each holding's yield split over the months
+   it usually pays in. Bonds, cash and stablecoins pay monthly, most funds and
+   stocks quarterly in Mar/Jun/Sep/Dec, and a few well-known payers on their
+   own months. The next twelve months, starting with this one. */
+var PAY_MONTHS = {
+  AAPL:[1,4,7,10], ABBV:[1,4,7,10], PG:[1,4,7,10], T:[1,4,7,10], VZ:[1,4,7,10], CVX:[2,5,8,11],
+  MRK:[0,3,6,9], KO:[3,6,9,11], PEP:[0,2,5,8], QQQ:[3,6,9,11], SCHD:[2,5,8,11], JEPI:"m", O:"m"
+};
+var MONTHLY = {bond:1, cash:1, crypto:1};
+function payMonths(h){
+  var m = PAY_MONTHS[(h.tick || "").toUpperCase()];
+  if (m === "m" || (!m && MONTHLY[h.cls])) return [0,1,2,3,4,5,6,7,8,9,10,11];
+  return m || [2,5,8,11];
+}
+var divPick = null;
+function renderIncome(){
+  var hs = invested(state.acct).filter(function(h){ return (h.yield || 0) > 0 && val(h) > 0; });
+  var now = new Date(), m0 = now.getMonth(), y0 = now.getFullYear(), months = [], i;
+  for(i=0;i<12;i++) months.push({mo:(m0+i)%12, yr:y0 + Math.floor((m0+i)/12), amt:0, from:[]});
+  hs.forEach(function(h){
+    var pm = payMonths(h), each = val(h)*h.yield/100/pm.length;
+    months.forEach(function(m){
+      if (pm.indexOf(m.mo) < 0) return;
+      m.amt += each;
+      m.from.push({h:h, amt:each});
+    });
+  });
+  var top = 0; months.forEach(function(m){ if (m.amt > top) top = m.amt; });
+  el("divBars").hidden = el("divMonth").hidden = !(top > 0);
+  if (!(top > 0)) return;
+  if (divPick === null || divPick > 11 || !(months[divPick].amt > 0)){
+    divPick = 0; while (divPick < 11 && !(months[divPick].amt > 0)) divPick++;
+  }
+  el("divBars").innerHTML = months.map(function(m, ix){
+    var name = new Date(m.yr, m.mo, 1).toLocaleDateString("en-US", {month:"short"});
+    return '<button data-mo="'+ix+'" class="'+(ix===divPick?"on":"")+'" aria-label="'+name+'">'+
+      '<b style="height:'+Math.max(2, Math.round(m.amt/top*56))+'px"></b><span>'+name.charAt(0)+'</span></button>';
+  }).join("");
+  var pick = months[divPick];
+  /* the same fund in two accounts is one payment to you */
+  var by = {};
+  pick.from.forEach(function(f){ var k = f.h.tick || f.h.name; by[k] = (by[k] || 0) + f.amt; });
+  var rows = Object.keys(by).map(function(k){ return {k:k, amt:by[k]}; })
+    .sort(function(a,b){ return b.amt - a.amt; });
+  var shown = rows.slice(0, 4), rest = rows.slice(4);
+  var monthName = new Date(pick.yr, pick.mo, 1).toLocaleDateString("en-US", {month:"long"});
+  el("divMonth").innerHTML =
+    '<div class="card-h" style="padding-top:var(--s-6)"><div class="card-t" style="font-weight:500">'+monthName+'</div>'+
+    '<div class="card-s num">'+usd(pick.amt)+'</div></div>'+
+    shown.map(function(r){
+      return '<div class="row"><div class="row-main"><div class="row-t">'+esc(r.k)+'</div></div>'+
+        '<div class="row-r"><div class="row-v num">'+usd(r.amt, 2)+'</div></div></div>';
+    }).join("") +
+    (rest.length ? '<div class="row"><div class="row-main"><div class="row-t dim" style="font-weight:400">'+rest.length+' more</div></div>'+
+      '<div class="row-r"><div class="row-v num dim">'+usd(sum(rest, function(r){ return r.amt; }), 2)+'</div></div></div>' : "");
 }
 
 /* ========================= breakdown tab ========================= */
@@ -1519,7 +1672,7 @@ function mergeHist(k, rows, src){
 var histBusy = {};
 function refreshHistory(){
   var td = getKey("td"), today = dayNum(new Date()), seen = {};
-  HOLDINGS.filter(priced).forEach(function(h){
+  HOLDINGS.filter(priced).concat(td ? [BENCH] : []).forEach(function(h){
     var k = histKey(h), t = h.tick.toUpperCase(), e = HIST[k], crypto = h.cls === "crypto";
     if (seen[k] || histBusy[k]) return;
     seen[k] = 1;
@@ -1632,7 +1785,7 @@ function cgIntra(t){
 }
 function refreshIntraday(){
   var td = getKey("td"), now = Date.now(), wkend = [0,6].indexOf(new Date().getDay()) >= 0, seen = {};
-  HOLDINGS.filter(priced).forEach(function(h){
+  HOLDINGS.filter(priced).concat(td ? [BENCH] : []).forEach(function(h){
     var k = histKey(h), t = h.tick.toUpperCase(), e = INTRA[k], crypto = h.cls === "crypto";
     if (seen[k] || intraBusy[k]) return;
     seen[k] = 1;
@@ -3060,6 +3213,31 @@ function unstick(){
 document.addEventListener("touchstart", unstick, {passive:true, capture:true});
 window.addEventListener("pageshow", unstick);
 document.addEventListener("visibilitychange", function(){ if(!document.hidden) unstick(); });
+
+var EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+var EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.5 10.5 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.4M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>';
+function paintMask(){
+  var b = el("maskBtn");
+  b.innerHTML = MASK ? EYE_OFF : EYE;
+  b.setAttribute("aria-label", MASK ? "Show amounts" : "Hide amounts");
+  b.setAttribute("aria-pressed", MASK ? "true" : "false");
+}
+el("maskBtn").addEventListener("click", function(){
+  MASK = !MASK;
+  try { if (MASK) localStorage.setItem("basis.mask", "1"); else localStorage.removeItem("basis.mask"); } catch(e){}
+  paintMask(); renderAll();
+});
+el("benchKey").addEventListener("click", function(){
+  benchOn = !benchOn;
+  try { if (benchOn) localStorage.removeItem("basis.bench"); else localStorage.setItem("basis.bench", "0"); } catch(e){}
+  paintHero();
+});
+el("divBars").addEventListener("click", function(e){
+  var b = e.target.closest("[data-mo]");
+  if (!b) return;
+  divPick = +b.dataset.mo; renderIncome();
+});
+paintMask();
 
 el("sheetCancel").addEventListener("click", leaveSheet);
 el("sheetClose").addEventListener("click", function(){
